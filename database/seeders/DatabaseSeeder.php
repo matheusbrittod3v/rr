@@ -20,6 +20,9 @@ class DatabaseSeeder extends Seeder
             RolesAndPermissionsSeeder::class,
             AdminUserSeeder::class,
             ProviderQueueTestSeeder::class,
+            WhatsAppApiSeeder::class,
+            ViewAllDataPermissionSeeder::class,
+            
         ]);
     }
 }
