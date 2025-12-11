@@ -13,9 +13,7 @@ use App\Models\Payment;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Gate;
 
 class PaymentResource extends Resource
 {
@@ -27,20 +25,22 @@ class PaymentResource extends Resource
 
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
-        $query = parent::getEloquentQuery();
-        
+        $query = parent::getEloquentQuery()
+            ->with(['orcamento.prestador']); // Eager load prestador through orcamento
+
         $user = auth()->user();
-        if ($user && !$user->can('view_all_data') && !$user->hasRole('admin')) {
-             if ($user->isProvider()) {
-                  $query->whereHas('orcamento', function ($q) use ($user) {
-                      $q->where('prestador_id', $user->id);
-                  });
-             } else {
-                  // Cliente: filtrar por email
-                  $query->where('email', $user->email);
-             }
+        if ($user && ! $user->can('view_all_data') && ! $user->hasRole('admin')) {
+            if ($user->isProvider()) {
+                // Prestador: filtrar por pagamentos vinculados aos seus orçamentos
+                $query->whereHas('orcamento', function ($q) use ($user) {
+                    $q->where('prestador_id', $user->id);
+                });
+            } else {
+                // Cliente: filtrar por email
+                $query->where('email', $user->email);
+            }
         }
-        
+
         return $query;
     }
 
