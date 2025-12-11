@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessWhatsReplyJob;
+use App\Models\FilaOrcamento as FilaOrcamentoModel;
+use App\Models\Orcamento;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Log;
-use App\Jobs\ProcessWhatsReplyJob;
 
 class WhatsWebhookController extends Controller
 {
@@ -26,6 +28,7 @@ class WhatsWebhookController extends Controller
         // Only process if it's a reply_message
         if (($payload['dataType'] ?? null) !== 'reply_message') {
             Log::debug('Webhook is not a reply_message, skipping', ['dataType' => $payload['dataType'] ?? null]);
+
             return response()->json(['status' => 'ok']);
         }
 
@@ -46,7 +49,7 @@ class WhatsWebhookController extends Controller
         Log::info('Extracted message bodies', [
             'quoted_length' => strlen($quotedBody ?? ''),
             'reply_length' => strlen($replyBody ?? ''),
-            'inner_keys' => is_array($inner) ? array_keys($inner) : null
+            'inner_keys' => is_array($inner) ? array_keys($inner) : null,
         ]);
 
         // Extract ID from quoted message
@@ -62,7 +65,7 @@ class WhatsWebhookController extends Controller
                 }
             }
             // Fallback: procura por padrão como KULZUUMB59
-            if (!$uniqueId && preg_match('/\b([A-Z]+\d+)\b/i', $quotedBody, $m)) {
+            if (! $uniqueId && preg_match('/\b([A-Z]+\d+)\b/i', $quotedBody, $m)) {
                 $uniqueId = strtoupper($m[1]);
                 Log::info('ID extracted via fallback', ['uniqueId' => $uniqueId]);
             }
@@ -93,9 +96,32 @@ class WhatsWebhookController extends Controller
 
         // Determine final status
         $status = 'sem_resposta';
-        if ($isYes && !$isNo) {
+        if ($isYes && ! $isNo) {
             $status = 'sim';
-        } elseif ($isNo && !$isYes) {
+            
+            // Link prestador to orcamento explicitly when confirmed "YES"
+            if ($uniqueId) {
+                try {
+                    $orcamento = Orcamento::where('id_orcamento', $uniqueId)->first();
+                    if ($orcamento) {
+                         // Load the queue entry to get the provider
+                         $fila = $orcamento->filaOrcamento; // Using the relationship
+                         if ($fila && $fila->prestador_id) {
+                             $orcamento->prestador_id = $fila->prestador_id;
+                             $orcamento->save();
+                             Log::info('Prestador linked to Orcamento via Webhook YES', [
+                                 'orcamento_id' => $orcamento->id,
+                                 'prestador_id' => $fila->prestador_id
+                             ]);
+                         } else {
+                             Log::warning('Webhook YES but no prestador in fila for orcamento', ['uniqueId' => $uniqueId]);
+                         }
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Error linking prestador in webhook', ['error' => $e->getMessage()]);
+                }
+            }
+        } elseif ($isNo && ! $isYes) {
             $status = 'nao';
         }
 
@@ -104,7 +130,7 @@ class WhatsWebhookController extends Controller
             'status' => $status,
             'valor' => $valor,
             'isYes' => $isYes,
-            'isNo' => $isNo
+            'isNo' => $isNo,
         ]);
 
         // Dispatch job with extracted info only
@@ -117,4 +143,3 @@ class WhatsWebhookController extends Controller
         return response()->json(['status' => 'ok']);
     }
 }
-

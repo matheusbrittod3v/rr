@@ -69,7 +69,11 @@ class ClientResource extends Resource
         
         $user = auth()->user();
         if ($user && !$user->can('view_all_data') && !$user->hasRole('admin')) {
-             $query->where('email', $user->email);
+             if ($user->isProvider()) {
+                 $query->where('prestador_id', $user->id);
+             } else {
+                 $query->where('email', $user->email);
+             }
         }
 
         return $query->whereIn('id', function ($query) use ($user) {
@@ -79,7 +83,11 @@ class ClientResource extends Resource
                       ->groupBy('email');
                       
                 if ($user && !$user->can('view_all_data') && !$user->hasRole('admin')) {
-                    $subQuery->where('email', $user->email);
+                    if ($user->isProvider()) {
+                        $subQuery->where('prestador_id', $user->id);
+                    } else {
+                        $subQuery->where('email', $user->email);
+                    }
                 }
             });
     }

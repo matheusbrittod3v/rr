@@ -19,13 +19,13 @@ class ChatRoomResource extends Resource
     protected static ?string $model = ChatRoom::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chat-bubble-left-ellipsis';
-    
+
     protected static ?string $navigationLabel = 'Salas de Chat';
-    
+
     protected static ?string $modelLabel = 'Sala de Chat';
-    
+
     protected static ?string $pluralModelLabel = 'Salas de Chat';
-    
+
     protected static ?int $navigationSort = 3;
 
     protected static ?string $recordTitleAttribute = 'room_code';
@@ -59,14 +59,14 @@ class ChatRoomResource extends Resource
             'view' => ViewChatRoom::route('/{record}'),
         ];
     }
-    
+
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()
             ->with([
                 'payment.orcamento.filaOrcamento.prestador',
                 'payment.orcamento.service.marca',
-                'messages'
+                'messages',
             ])
             ->whereHas('payment', function ($query) {
                 $query->whereIn('status', ['pago', 'success']);
@@ -74,30 +74,23 @@ class ChatRoomResource extends Resource
 
         // Check for 'view_all_data' permission
         $user = auth()->user();
-        if ($user && !$user->can('view_all_data') && !$user->hasRole('admin')) {
-            // Se for prestador: ver salas onde é o prestador
+        if ($user && ! $user->can('view_all_data') && ! $user->hasRole('admin')) {
+            // Se for prestador: ver salas onde é o prestador vinculado ao orçamento
             if ($user->isProvider()) {
-                 $query->whereHas('payment.orcamento.filaOrcamento', function($q) use ($user) {
-                     $q->where('prestador_id', $user->id); // Assumindo relação com User ID na fila se houver, ou via model Prestador linkado ao user
-                     // OBS: FilaOrcamento tem prestador_id. Se prestador_id for ID da tabela user, ok. Se for ID de tabela Prestador, precisamos mapear.
-                     // User tem providerQueueEntry -> user_id.
-                     // Vamos filtrar pelo email do prestador se for o caso, ou assumir user->id == prestador_id se a role for prestador.
-                     // O model FilaOrcamento usa 'prestador_id' que parece ser da tabela 'fila_prestadores' (id).
-                     // User belongsTo FilaPrestador?? Não, hasOne providerQueueEntry.
-                 });
-                 // Melhor: ChatRoom tem link com Payment -> Orcamento.
-                 // Se não conseguir validar provider, filtrar por email seria safer se User tiver email igual.
+                $query->whereHas('payment.orcamento', function ($q) use ($user) {
+                    $q->where('prestador_id', $user->id);
+                });
             } else {
-                 // Cliente: ver salas do seu email
-                 $query->whereHas('payment', function($q) use ($user) {
-                     $q->where('email', $user->email);
-                 });
+                // Cliente: ver salas do seu email
+                $query->whereHas('payment', function ($q) use ($user) {
+                    $q->where('email', $user->email);
+                });
             }
         }
 
         return $query;
     }
-    
+
     public static function canViewAny(): bool
     {
         return auth()->user()->can('view_chat_rooms');
@@ -107,17 +100,17 @@ class ChatRoomResource extends Resource
     {
         return auth()->user()->can('create_chat_rooms');
     }
-    
+
     public static function canEdit($record): bool
     {
         return auth()->user()->can('edit_chat_rooms');
     }
-    
+
     public static function canDelete($record): bool
     {
         return auth()->user()->can('delete_chat_rooms');
     }
-    
+
     public static function canDeleteAny(): bool
     {
         return auth()->user()->can('delete_chat_rooms');

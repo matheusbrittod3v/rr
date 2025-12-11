@@ -2878,6 +2878,7 @@ namespace App\Models {
     /**
      * App\Models\Orcamento
      *
+     * @property int|null $prestador_id
      * @property int|null $service_id
      * @property string $status
      * @property string|null $id_orcamento
@@ -2892,6 +2893,7 @@ namespace App\Models {
      * @property-read \App\Models\FilaOrcamento $filaOrcamento
      * @property-read \App\Models\FilaOrcamento $filaOrcamentoWithProvider
      * @property-read \App\Models\Service $service
+     * @property-read \App\Models\User $prestador
      * @method static \Illuminate\Database\Eloquent\Builder<Orcamento>|Orcamento whereId($value)
      * @method static \Illuminate\Database\Eloquent\Builder<Orcamento>|Orcamento whereEmail($value)
      * @method static \Illuminate\Database\Eloquent\Builder<Orcamento>|Orcamento whereNumero($value)
@@ -2903,6 +2905,7 @@ namespace App\Models {
      * @method static \Illuminate\Database\Eloquent\Builder<Orcamento>|Orcamento whereIdOrcamento($value)
      * @method static \Illuminate\Database\Eloquent\Builder<Orcamento>|Orcamento whereStatus($value)
      * @method static \Illuminate\Database\Eloquent\Builder<Orcamento>|Orcamento whereServiceId($value)
+     * @method static \Illuminate\Database\Eloquent\Builder<Orcamento>|Orcamento wherePrestadorId($value)
      * @method static \Illuminate\Database\Eloquent\Builder<Orcamento>|Orcamento newModelQuery()
      * @method static \Illuminate\Database\Eloquent\Builder<Orcamento>|Orcamento newQuery()
      * @method static \Illuminate\Database\Eloquent\Builder<Orcamento>|Orcamento query()
