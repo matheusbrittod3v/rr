@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use BackedEnum;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -9,6 +10,7 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 
@@ -16,14 +18,14 @@ class Profile extends Page implements HasForms
 {
     use InteractsWithForms;
 
-    protected static ?string $navigationIcon = 'heroicon-o-user-circle';
-    
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlineUserCircle;
+
     protected static ?string $navigationLabel = 'Profile';
-    
+
     protected static ?string $title = 'My Profile';
-    
+
     protected static ?int $navigationSort = 100;
-    
+
     protected static bool $shouldRegisterNavigation = false; // Hide from sidebar
 
     protected static string $view = 'filament.pages.profile';
@@ -51,7 +53,7 @@ class Profile extends Page implements HasForms
                             ->required()
                             ->maxLength(255)
                             ->prefixIcon('heroicon-o-user'),
-                        
+
                         TextInput::make('email')
                             ->label('Email Address')
                             ->email()
@@ -59,7 +61,7 @@ class Profile extends Page implements HasForms
                             ->unique('users', 'email', ignoreRecord: true)
                             ->maxLength(255)
                             ->prefixIcon('heroicon-o-envelope'),
-                        
+
                         TextInput::make('numero')
                             ->label('Phone Number')
                             ->tel()
@@ -79,7 +81,7 @@ class Profile extends Page implements HasForms
                             ->requiredWith('new_password')
                             ->currentPassword()
                             ->prefixIcon('heroicon-o-lock-closed'),
-                        
+
                         TextInput::make('new_password')
                             ->label('New Password')
                             ->password()
@@ -88,7 +90,7 @@ class Profile extends Page implements HasForms
                             ->rule(Password::default())
                             ->confirmed()
                             ->prefixIcon('heroicon-o-key'),
-                        
+
                         TextInput::make('new_password_confirmation')
                             ->label('Confirm New Password')
                             ->password()
@@ -106,9 +108,9 @@ class Profile extends Page implements HasForms
     public function save(): void
     {
         $data = $this->form->getState();
-        
+
         $user = auth()->user();
-        
+
         // Update basic info
         $user->update([
             'name' => $data['name'],
@@ -117,7 +119,7 @@ class Profile extends Page implements HasForms
         ]);
 
         // Update password if provided
-        if (!empty($data['new_password'])) {
+        if (! empty($data['new_password'])) {
             $user->update([
                 'password' => Hash::make($data['new_password']),
             ]);
