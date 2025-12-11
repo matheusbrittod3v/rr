@@ -372,7 +372,7 @@ document.addEventListener('DOMContentLoaded', function() {
         sendMessageUrl: "{{ route('chat.send-message', $chatRoom->room_code) }}",
         getMessagesUrl: "{{ route('chat.get-messages', $chatRoom->room_code) }}",
         signalsUrl: "{{ route('chat.signals', $chatRoom->room_code) }}",
-        sendSignalUrl: "{{ route('chat.send-signal', $chatRoom->room_code) }}"
+        sendSignalUrl: "{{ route('chat.signal', $chatRoom->room_code) }}"
     };
 
     // ========== CHAT FUNCTIONS ==========
