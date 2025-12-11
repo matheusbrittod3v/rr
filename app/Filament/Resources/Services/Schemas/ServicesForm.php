@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Services\Schemas;
 
-use App\Models\Marca;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -33,21 +32,36 @@ class ServicesForm
                 Repeater::make('customFields')
                     ->label('Campos Personalizados')
                     ->relationship()
+                    ->mutateRelationshipDataBeforeCreateUsing(function (array $data): array {
+                        // On create, structure the data correctly
+                        $data['parametros_campo'] = [
+                            'field_name' => $data['field_name'] ?? '',
+                            'field_type' => $data['field_type'] ?? 'text',
+                        ];
+                        // Remove the individual fields as they're now in parametros_campo
+                        unset($data['field_name'], $data['field_type']);
+
+                        return $data;
+                    })
                     ->mutateRelationshipDataBeforeSaveUsing(function (array $data): array {
-                        // Preserve existing parametros_campo data and update only the field_name and field_type
-                        $parametrosCampo = $data['parametros_campo'] ?? [];
-                        $parametrosCampo['field_name'] = $data['field_name'] ?? '';
-                        $parametrosCampo['field_type'] = $data['field_type'] ?? 'text';
-                        $data['parametros_campo'] = $parametrosCampo;
+                        // On update, structure the data correctly
+                        $data['parametros_campo'] = [
+                            'field_name' => $data['field_name'] ?? '',
+                            'field_type' => $data['field_type'] ?? 'text',
+                        ];
+                        // Remove the individual fields as they're now in parametros_campo
+                        unset($data['field_name'], $data['field_type']);
+
                         return $data;
                     })
                     ->mutateRelationshipDataBeforeFillUsing(function (array $data): array {
                         // Extract field data from parametros_campo for the form
                         if (isset($data['parametros_campo'])) {
-                            $params = $data['parametros_campo'];
+                            $params = is_array($data['parametros_campo']) ? $data['parametros_campo'] : json_decode($data['parametros_campo'], true);
                             $data['field_name'] = $params['field_name'] ?? '';
                             $data['field_type'] = $params['field_type'] ?? 'text';
                         }
+
                         return $data;
                     })
                     ->schema([
@@ -60,13 +74,15 @@ class ServicesForm
                                 'text' => 'Texto',
                                 'number' => 'Numérico',
                             ])
+                            ->default('text')
                             ->required(),
                     ])
                     ->addActionLabel('Adicionar Campo')
-                    ->itemLabel(fn (array $state): string => $state['field_name'] ?? '')
+                    ->itemLabel(fn (array $state): ?string => $state['field_name'] ?? null)
                     ->collapsible()
                     ->collapsed()
-                    ->columnSpanFull(),
+                    ->columnSpanFull()
+                    ->defaultItems(0),
             ]);
     }
 }
