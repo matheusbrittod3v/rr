@@ -1,0 +1,15 @@
+User-agent: *
+Disallow: /vendor/
+Disallow: /storage/
+Disallow: /config/
+Disallow: /database/
+Disallow: /resources/
+Disallow: /tests/
+Disallow: /node_modules/
+
+Allow: /
+Allow: /sitemap.xml
+
+Sitemap: https://renttool.store/sitemap.xml
+
+Host: renttool.com
