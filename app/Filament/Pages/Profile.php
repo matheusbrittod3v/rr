@@ -28,7 +28,7 @@ class Profile extends Page implements HasForms
 
     protected static bool $shouldRegisterNavigation = false; // Hide from sidebar
 
-    protected static string $view = 'filament.pages.profile';
+    protected string $view = 'filament.pages.profile';
 
     public ?array $data = [];
 
