@@ -100,6 +100,9 @@ class RolesAndPermissionsSeeder extends Seeder
             ['name' => 'create_fila_prestadores', 'description' => 'Can create provider queue items'],
             ['name' => 'edit_fila_prestadores', 'description' => 'Can edit provider queue items'],
             ['name' => 'delete_fila_prestadores', 'description' => 'Can delete provider queue items'],
+
+            // Admin Chat Access
+            ['name' => 'access_admin_chat', 'description' => 'Can access any chat room as admin'],
         ];
 
         // Insert permissions

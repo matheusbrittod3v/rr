@@ -18,6 +18,11 @@ class ChatController extends Controller
      */
     public function showLogin($roomCode)
     {
+        // If user is admin, redirect directly to room
+        if (Auth::check() && Auth::user()->can('access_admin_chat')) {
+            return redirect()->route('chat.room', $roomCode);
+        }
+
         $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
         
         return view('chat.login', compact('roomCode'));
@@ -28,19 +33,31 @@ class ChatController extends Controller
      */
     public function authenticate(Request $request, $roomCode)
     {
+        // Admin Bypass
+        if (Auth::check() && Auth::user()->can('access_admin_chat')) {
+             session(['chat_user_role' => 'admin']);
+             // No need to set authenticated_chat_room because showRoom checks permission
+             return redirect()->route('chat.room', $roomCode);
+        }
+
         $request->validate([
             'password' => 'required|string',
         ]);
 
         $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
 
-        // Check if password matches either client or provider password
-        if ($request->password !== $chatRoom->client_password && $request->password !== $chatRoom->provider_password) {
+        $role = null;
+
+        // Strict Check
+        if ($request->password === $chatRoom->client_password) {
+            $role = 'client';
+        } elseif ($request->password === $chatRoom->provider_password) {
+            $role = 'provider';
+        } else {
             return back()->withErrors(['password' => 'Senha incorreta.']);
         }
         
         // Store which role the user authenticated as
-        $role = ($request->password === $chatRoom->client_password) ? 'client' : 'provider';
         session(['chat_user_role' => $role]);
 
         // Store authenticated room code in session
@@ -54,27 +71,33 @@ class ChatController extends Controller
      */
     public function showRoom($roomCode)
     {
-        // Log for debugging
-        \Log::info('Checking chat room access', [
-            'requested_room' => $roomCode,
-            'authenticated_room' => session('authenticated_chat_room'),
-            'authenticated_from_payment' => session('authenticated_from_payment')
-        ]);
-        
-        // Check if user is authenticated for this room
-        $authenticatedRoom = session('authenticated_chat_room');
-        if ($authenticatedRoom !== $roomCode) {
-            // Check if this is a fresh session from payment approval
-            $recentlyAuthenticated = session('authenticated_from_payment', false);
+        $isAdmin = Auth::check() && Auth::user()->can('access_admin_chat');
+
+        // Check permission if not admin
+        if (! $isAdmin) {
+             // Log for debugging
+            \Log::info('Checking chat room access', [
+                'requested_room' => $roomCode,
+                'authenticated_room' => session('authenticated_chat_room'),
+                'authenticated_from_payment' => session('authenticated_from_payment')
+            ]);
             
-            if ($recentlyAuthenticated) {
-                // Auto-authenticate the user for this room
-                session(['authenticated_chat_room' => $roomCode]);
-                session()->forget('authenticated_from_payment');
-                \Log::info('Auto-authenticated user for chat room', ['room_code' => $roomCode]);
-            } else {
-                \Log::info('Redirecting to chat login', ['room_code' => $roomCode]);
-                return redirect()->route('chat.login', $roomCode);
+            // Check if user is authenticated for this room
+            $authenticatedRoom = session('authenticated_chat_room');
+            if ($authenticatedRoom !== $roomCode) {
+                // Check if this is a fresh session from payment approval
+                $recentlyAuthenticated = session('authenticated_from_payment', false);
+                
+                if ($recentlyAuthenticated) {
+                    // Auto-authenticate as client because payment flow is client-side
+                    session(['authenticated_chat_room' => $roomCode]);
+                    session(['chat_user_role' => 'client']); 
+                    session()->forget('authenticated_from_payment');
+                    \Log::info('Auto-authenticated user for chat room', ['room_code' => $roomCode]);
+                } else {
+                    \Log::info('Redirecting to chat login', ['room_code' => $roomCode]);
+                    return redirect()->route('chat.login', $roomCode);
+                }
             }
         }
 
@@ -106,7 +129,7 @@ class ChatController extends Controller
             }
         }
 
-        return view('chat.room', compact('chatRoom', 'client', 'provider'));
+        return view('chat.room', compact('chatRoom', 'client', 'provider', 'isAdmin'));
     }
 
     /**
@@ -114,8 +137,10 @@ class ChatController extends Controller
      */
     public function sendMessage(Request $request, $roomCode)
     {
-        // Check if user is authenticated for this room
-        if (session('authenticated_chat_room') !== $roomCode) {
+        $isAdmin = Auth::check() && Auth::user()->can('access_admin_chat');
+
+        // Check permission
+        if (! $isAdmin && session('authenticated_chat_room') !== $roomCode) {
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 
@@ -126,21 +151,20 @@ class ChatController extends Controller
 
         $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
 
-        // Determine sender type based on session
-        $senderType = 'client'; // Default to client
-        
-        // If authenticated from payment, it's definitely the client
-        if (session('authenticated_from_payment')) {
-            $senderType = 'client';
-        } 
-        // If authenticated with a specific role, use that
-        elseif (session('chat_user_role')) {
+        // Determine sender type
+        $senderType = 'client'; // Default
+
+        if ($isAdmin) {
+            $senderType = 'admin';
+        } elseif (session('chat_user_role')) {
             $senderType = session('chat_user_role');
+        } elseif (session('authenticated_from_payment')) {
+            $senderType = 'client';
         }
 
         $messageData = [
             'chat_room_id' => $chatRoom->id,
-            'sender_id' => null, // Not storing user ID for privacy
+            'sender_id' => Auth::id(), // Store user ID if logged in (admin/provider logged in system)
             'sender_type' => $senderType,
             'message' => $request->message,
         ];
@@ -170,8 +194,10 @@ class ChatController extends Controller
      */
     public function getMessages($roomCode)
     {
-        // Check if user is authenticated for this room
-        if (session('authenticated_chat_room') !== $roomCode) {
+        $isAdmin = Auth::check() && Auth::user()->can('access_admin_chat');
+
+        // Check permission
+        if (! $isAdmin && session('authenticated_chat_room') !== $roomCode) {
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 
@@ -195,7 +221,10 @@ class ChatController extends Controller
         
         // Generate separate passwords for client and provider
         $clientPassword = Str::random(8);
-        $providerPassword = Str::random(8);
+        // Ensure they are different
+        do {
+            $providerPassword = Str::random(8);
+        } while ($providerPassword === $clientPassword);
         
         // Create the chat room
         $chatRoom = ChatRoom::create([
