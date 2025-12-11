@@ -1,18 +1,15 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\SitemapController;
-use App\Http\Controllers\HomeController;
-use App\Http\Controllers\Api\MercadoPagoController;
-use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\Api\DhruController;
+use App\Http\Controllers\Api\MercadoPagoController;
 use App\Http\Controllers\Api\NotificationController;
-use App\Http\Controllers\RoleController;
-use App\Http\Controllers\PermissionController;
-use App\Http\Controllers\UserController;
 use App\Http\Controllers\ChatController;
-use App\Http\Controllers\WhatsApiController;
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RegistrationLinkController;
+use App\Http\Controllers\SitemapController;
+use App\Http\Controllers\WhatsApiController;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index']);
 
@@ -31,11 +28,11 @@ Route::get('/websocket-test', function () {
 Route::get('/test-websocket', function () {
     // Fire a test event
     event(new App\Events\PaymentStatusUpdated(
-        new App\Models\Payment(), 
-        'test', 
+        new App\Models\Payment,
+        'test',
         'WebSocket connection test'
     ));
-    
+
     return response()->json(['success' => true, 'message' => 'Test event fired']);
 });
 
@@ -48,7 +45,6 @@ Route::prefix('api/mercadopago')->group(function () {
     Route::get('/check-payment-status/{paymentId}', [MercadoPagoController::class, 'checkPaymentStatus']);
     Route::get('/notification', [MercadoPagoController::class, 'handleNotification'])->middleware('verify.mercadopago');
 
-    
 });
 
 // Rotas da API do DHRU
@@ -83,6 +79,10 @@ Route::prefix('chat')->group(function () {
     Route::get('/{roomCode}/room', [ChatController::class, 'showRoom'])->name('chat.room');
     Route::post('/{roomCode}/send-message', [ChatController::class, 'sendMessage'])->name('chat.send-message');
     Route::get('/{roomCode}/messages', [ChatController::class, 'getMessages'])->name('chat.get-messages');
+
+    // WebRTC Signaling (AJAX Polling)
+    Route::post('/{roomCode}/signal', [ChatController::class, 'sendSignal'])->name('chat.signal');
+    Route::get('/{roomCode}/signals', [ChatController::class, 'fetchSignals'])->name('chat.signals');
 });
 
 // WhatsApp QR Code endpoint (única instância - uso interno)
