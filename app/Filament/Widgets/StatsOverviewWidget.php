@@ -25,11 +25,17 @@ class StatsOverviewWidget extends BaseWidget
         $orcamentoQuery = Orcamento::query();
         
         if (!$canViewAll) {
-            $paymentQuery->where('email', $user->email);
-            // ChatRoom Filter
-            $chatQuery->whereHas('payment', fn($q) => $q->where('email', $user->email));
-            // Orcamento Filter
-            $orcamentoQuery->where('email', $user->email);
+            if ($user->isProvider()) {
+                // Provider: filter by prestador_id
+                $paymentQuery->whereHas('orcamento', fn($q) => $q->where('prestador_id', $user->id));
+                $chatQuery->whereHas('payment.orcamento', fn($q) => $q->where('prestador_id', $user->id));
+                $orcamentoQuery->where('prestador_id', $user->id);
+            } else {
+                // Client: filter by email
+                $paymentQuery->where('email', $user->email);
+                $chatQuery->whereHas('payment', fn($q) => $q->where('email', $user->email));
+                $orcamentoQuery->where('email', $user->email);
+            }
         }
 
         // 1. Total Geral de Orçamentos

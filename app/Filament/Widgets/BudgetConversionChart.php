@@ -23,8 +23,13 @@ class BudgetConversionChart extends ChartWidget
         $queryOutros = Payment::whereNotIn('status', ['pago', 'success']);
         
         if (!$canViewAll) {
-            $queryPagos->where('email', $user->email);
-            $queryOutros->where('email', $user->email);
+            if ($user->isProvider()) {
+                $queryPagos->whereHas('orcamento', fn($q) => $q->where('prestador_id', $user->id));
+                $queryOutros->whereHas('orcamento', fn($q) => $q->where('prestador_id', $user->id));
+            } else {
+                $queryPagos->where('email', $user->email);
+                $queryOutros->where('email', $user->email);
+            }
         }
 
         $pagos = $queryPagos->count();

@@ -25,7 +25,11 @@ class RevenueChart extends ChartWidget
             ->where('created_at', '>=', now()->subDays(15));
             
         if (!$canViewAll) {
-            $query->where('email', $user->email);
+            if ($user->isProvider()) {
+                $query->whereHas('orcamento', fn($q) => $q->where('prestador_id', $user->id));
+            } else {
+                $query->where('email', $user->email);
+            }
         }
 
         $data = $query->groupBy('date')

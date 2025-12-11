@@ -21,7 +21,11 @@ class PaymentsChart extends ChartWidget
             ->groupBy('status');
             
         if (!$canViewAll) {
-            $query->where('email', $user->email);
+            if ($user->isProvider()) {
+                $query->whereHas('orcamento', fn($q) => $q->where('prestador_id', $user->id));
+            } else {
+                $query->where('email', $user->email);
+            }
         }
         
         $data = $query->get();
