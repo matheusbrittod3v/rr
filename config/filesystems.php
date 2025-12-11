@@ -38,14 +38,16 @@ return [
             'report' => false,
         ],
 
-        'public' => [
-            'driver' => 'local',
-            'root' => storage_path('app/public'),
-            'url' => env('APP_URL').'/storage',
-            'visibility' => 'public',
-            'throw' => false,
-            'report' => false,
-        ],
+       'public' => [
+    'driver' => 'local',
+    'root' => public_path(), // << AGORA VAI PARA /public
+    'url' => env('APP_URL'),
+    'visibility' => 'public',
+    'throw' => false,
+    'report' => false,
+],
+
+        
 
         's3' => [
             'driver' => 's3',
@@ -74,7 +76,7 @@ return [
     */
 
     'links' => [
-        public_path('storage') => storage_path('app/public'),
+        public_path('public') => storage_path('app/public'),
     ],
 
 ];
