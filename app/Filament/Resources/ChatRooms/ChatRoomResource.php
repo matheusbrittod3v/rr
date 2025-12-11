@@ -90,29 +90,4 @@ class ChatRoomResource extends Resource
 
         return $query;
     }
-
-    public static function canViewAny(): bool
-    {
-        return auth()->user()->can('view_chat_rooms');
-    }
-
-    public static function canCreate(): bool
-    {
-        return auth()->user()->can('create_chat_rooms');
-    }
-
-    public static function canEdit($record): bool
-    {
-        return auth()->user()->can('edit_chat_rooms');
-    }
-
-    public static function canDelete($record): bool
-    {
-        return auth()->user()->can('delete_chat_rooms');
-    }
-
-    public static function canDeleteAny(): bool
-    {
-        return auth()->user()->can('delete_chat_rooms');
-    }
 }

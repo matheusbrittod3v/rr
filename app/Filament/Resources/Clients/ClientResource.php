@@ -8,8 +8,6 @@ use App\Filament\Resources\Clients\Schemas\ClientInfolist;
 use App\Filament\Resources\Clients\Tables\ClientsTable;
 use App\Models\Orcamento;
 use BackedEnum;
-use Filament\Forms\Form;
-use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
@@ -21,17 +19,17 @@ class ClientResource extends Resource
     protected static ?string $model = Orcamento::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-users';
-    
+
     protected static ?string $navigationLabel = 'Clientes';
-    
+
     protected static ?string $modelLabel = 'Cliente';
-    
+
     protected static ?string $pluralModelLabel = 'Clientes';
-    
+
     protected static ?int $navigationSort = 4;
 
     protected static ?string $recordTitleAttribute = 'email';
-    
+
     // Customização para parecer "Client"
     protected static ?string $slug = 'clients';
 
@@ -61,59 +59,34 @@ class ClientResource extends Resource
             'index' => ListClients::route('/'),
         ];
     }
-    
+
     public static function getEloquentQuery(): Builder
     {
         // Filtra para pegar apenas o último orçamento de cada email único (Cliente Único)
         $query = parent::getEloquentQuery();
-        
+
         $user = auth()->user();
-        if ($user && !$user->can('view_all_data') && !$user->hasRole('admin')) {
-             if ($user->isProvider()) {
-                 $query->where('prestador_id', $user->id);
-             } else {
-                 $query->where('email', $user->email);
-             }
+        if ($user && ! $user->can('view_all_data') && ! $user->hasRole('admin')) {
+            if ($user->isProvider()) {
+                $query->where('prestador_id', $user->id);
+            } else {
+                $query->where('email', $user->email);
+            }
         }
 
         return $query->whereIn('id', function ($query) use ($user) {
-                $subQuery = $query->select(DB::raw('MAX(id)'))
-                      ->from('orcamentos')
-                      ->whereNotNull('email')
-                      ->groupBy('email');
-                      
-                if ($user && !$user->can('view_all_data') && !$user->hasRole('admin')) {
-                    if ($user->isProvider()) {
-                        $subQuery->where('prestador_id', $user->id);
-                    } else {
-                        $subQuery->where('email', $user->email);
-                    }
-                }
-            });
-    }
-    
-    public static function canViewAny(): bool
-    {
-        return auth()->user()->can('view_clients');
-    }
+            $subQuery = $query->select(DB::raw('MAX(id)'))
+                ->from('orcamentos')
+                ->whereNotNull('email')
+                ->groupBy('email');
 
-    public static function canCreate(): bool
-    {
-        return false;
-    }
-    
-    public static function canEdit($record): bool
-    {
-        return false;
-    }
-    
-    public static function canDelete($record): bool
-    {
-        return auth()->user()->can('delete_clients');
-    }
-    
-    public static function canDeleteAny(): bool
-    {
-        return auth()->user()->can('delete_clients');
+            if ($user && ! $user->can('view_all_data') && ! $user->hasRole('admin')) {
+                if ($user->isProvider()) {
+                    $subQuery->where('prestador_id', $user->id);
+                } else {
+                    $subQuery->where('email', $user->email);
+                }
+            }
+        });
     }
 }

@@ -12,7 +12,8 @@ class OrcamentoPolicy
      */
     public function viewAny(User $user): bool
     {
-        return $user->hasPermission('view_orcamentos');
+        // Check both orcamentos and clients permissions (ClientResource uses Orcamento model)
+        return $user->hasPermission('view_orcamentos') || $user->hasPermission('view_clients');
     }
 
     /**
@@ -41,6 +42,8 @@ class OrcamentoPolicy
      */
     public function create(User $user): bool
     {
+        // Users with only view_clients permission cannot create (ClientResource is readonly)
+        // Only users with create_orcamentos can create
         return $user->hasPermission('create_orcamentos');
     }
 
@@ -49,6 +52,8 @@ class OrcamentoPolicy
      */
     public function update(User $user, Orcamento $orcamento): bool
     {
+        // Users with only view_clients permission cannot edit (ClientResource is readonly)
+        // Only users with edit_orcamentos can edit
         return $user->hasPermission('edit_orcamentos');
     }
 
