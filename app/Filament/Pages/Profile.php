@@ -5,18 +5,14 @@ namespace App\Filament\Pages;
 use BackedEnum;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Concerns\InteractsWithForms;
-use Filament\Forms\Contracts\HasForms;
+use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
-use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 
-class Profile extends Page implements HasForms
+class Profile extends Page
 {
-    use InteractsWithForms;
-
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-user-circle';
 
     protected static ?string $navigationLabel = 'Profile';
@@ -25,9 +21,9 @@ class Profile extends Page implements HasForms
 
     protected static ?int $navigationSort = 100;
 
-    protected static bool $shouldRegisterNavigation = false; // Hide from sidebar
+    protected static bool $shouldRegisterNavigation = false;
 
-    protected string $view = 'filament.pages.profile';
+    protected static string $view = 'filament.pages.profile';
 
     public ?array $data = [];
 
@@ -40,33 +36,28 @@ class Profile extends Page implements HasForms
         ]);
     }
 
-    public function schema(Schema $schema): Schema
+    public function form(Form $form): Form
     {
-        return $schema
-            ->statePath('data')
-            ->components([
+        return $form
+            ->schema([
                 Section::make('Personal Information')
                     ->description('Update your personal details here.')
                     ->schema([
                         TextInput::make('name')
                             ->label('Full Name')
                             ->required()
-                            ->maxLength(255)
-                            ->prefixIcon('heroicon-o-user'),
+                            ->maxLength(255),
 
                         TextInput::make('email')
                             ->label('Email Address')
                             ->email()
                             ->required()
-                            ->unique('users', 'email', ignoreRecord: true)
-                            ->maxLength(255)
-                            ->prefixIcon('heroicon-o-envelope'),
+                            ->maxLength(255),
 
                         TextInput::make('numero')
                             ->label('Phone Number')
                             ->tel()
-                            ->maxLength(20)
-                            ->prefixIcon('heroicon-o-phone'),
+                            ->maxLength(20),
                     ])
                     ->columns(2),
 
@@ -79,8 +70,7 @@ class Profile extends Page implements HasForms
                             ->revealable()
                             ->dehydrated(false)
                             ->requiredWith('new_password')
-                            ->currentPassword()
-                            ->prefixIcon('heroicon-o-lock-closed'),
+                            ->currentPassword(),
 
                         TextInput::make('new_password')
                             ->label('New Password')
@@ -88,20 +78,19 @@ class Profile extends Page implements HasForms
                             ->revealable()
                             ->dehydrated(false)
                             ->rule(Password::default())
-                            ->confirmed()
-                            ->prefixIcon('heroicon-o-key'),
+                            ->confirmed(),
 
                         TextInput::make('new_password_confirmation')
                             ->label('Confirm New Password')
                             ->password()
                             ->revealable()
-                            ->dehydrated(false)
-                            ->prefixIcon('heroicon-o-key'),
+                            ->dehydrated(false),
                     ])
                     ->columns(3)
                     ->collapsible()
                     ->collapsed(),
-            ]);
+            ])
+            ->statePath('data');
     }
 
     public function save(): void
@@ -110,14 +99,12 @@ class Profile extends Page implements HasForms
 
         $user = auth()->user();
 
-        // Update basic info
         $user->update([
             'name' => $data['name'],
             'email' => $data['email'],
             'numero' => $data['numero'] ?? null,
         ]);
 
-        // Update password if provided
         if (! empty($data['new_password'])) {
             $user->update([
                 'password' => Hash::make($data['new_password']),
@@ -130,11 +117,10 @@ class Profile extends Page implements HasForms
             ->body('Your profile has been updated successfully.')
             ->send();
 
-        // Refresh form
         $this->form->fill([
-            'name' => $user->name,
-            'email' => $user->email,
-            'numero' => $user->numero,
+            'name' => $user->fresh()->name,
+            'email' => $user->fresh()->email,
+            'numero' => $user->fresh()->numero,
         ]);
     }
 }
