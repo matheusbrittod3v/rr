@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Jobs\ProcessWhatsReplyJob;
 use App\Models\FilaOrcamento as FilaOrcamentoModel;
 use App\Models\Orcamento;
+use App\Models\FilaPrestador;
+use App\Jobs\NotifyProviderNewBudgetJob;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Log;
@@ -71,9 +73,10 @@ class WhatsWebhookController extends Controller
             }
         }
 
-        // Extract status (sim/não) and valor from reply message
+        // Extract status (sim/não/proximo) and valor from reply message
         $isYes = false;
         $isNo = false;
+        $isNext = false;
         $valor = null;
 
         if ($replyBody) {
@@ -92,11 +95,61 @@ class WhatsWebhookController extends Controller
             if (preg_match('/\b(nao|não)\b/i', $lower)) {
                 $isNo = true;
             }
+            // Check for 'proximo' / 'próximo'
+            if (preg_match('/\b(proximo|próximo)\b/i', $lower)) {
+                $isNext = true;
+            }
         }
 
-        // Determine final status
+        // Handle "proximo" command
+        if ($isNext && $uniqueId) {
+            Log::info('Processing "proximo" command for budget', ['uniqueId' => $uniqueId]);
+            
+            // Find the budget/orcamento by unique ID
+            $orcamento = Orcamento::where('id_orcamento', $uniqueId)->first();
+            
+            if ($orcamento) {
+                // Get the current queue entry
+                $filaOrcamento = $orcamento->filaOrcamento;
+                
+                if ($filaOrcamento) {
+                    // Get the next provider in the queue
+                    $nextProvider = FilaPrestador::orderBy('position')->first();
+                    
+                    if ($nextProvider) {
+                        // Assign the budget to the next provider
+                        $filaOrcamento->prestador_id = $nextProvider->user_id;
+                        $filaOrcamento->save();
+                        
+                        // Move the provider to the end of the queue
+                        $maxPosition = FilaPrestador::max('position');
+                        $nextProvider->position = $maxPosition + 1;
+                        $nextProvider->save();
+                        
+                        // Dispatch notification to the next provider
+                        NotifyProviderNewBudgetJob::dispatch($filaOrcamento->id);
+                        
+                        Log::info('Budget reassigned to next provider', [
+                            'orcamento_id' => $orcamento->id,
+                            'unique_id' => $uniqueId,
+                            'new_provider_id' => $nextProvider->user_id
+                        ]);
+                        
+                        return response()->json(['status' => 'ok']);
+                    } else {
+                        Log::warning('No next provider found in queue', ['uniqueId' => $uniqueId]);
+                    }
+                } else {
+                    Log::warning('No queue entry found for budget', ['uniqueId' => $uniqueId]);
+                }
+            } else {
+                Log::warning('Budget not found for unique ID', ['uniqueId' => $uniqueId]);
+            }
+        }
+
+        // Determine final status for regular replies
         $status = 'sem_resposta';
-        if ($isYes && ! $isNo) {
+        if ($isYes && ! $isNo && ! $isNext) {
             $status = 'sim';
             
             // Link prestador to orcamento explicitly when confirmed "YES"
@@ -121,7 +174,7 @@ class WhatsWebhookController extends Controller
                     Log::error('Error linking prestador in webhook', ['error' => $e->getMessage()]);
                 }
             }
-        } elseif ($isNo && ! $isYes) {
+        } elseif ($isNo && ! $isYes && ! $isNext) {
             $status = 'nao';
         }
 
@@ -131,12 +184,13 @@ class WhatsWebhookController extends Controller
             'valor' => $valor,
             'isYes' => $isYes,
             'isNo' => $isNo,
+            'isNext' => $isNext,
         ]);
 
         // Dispatch job with extracted info only
-        if ($uniqueId) {
+        if ($uniqueId && !$isNext) {
             ProcessWhatsReplyJob::dispatch($uniqueId, $status, $valor);
-        } else {
+        } elseif (!$uniqueId) {
             Log::warning('Could not extract ID from webhook, job not dispatched');
         }
 
