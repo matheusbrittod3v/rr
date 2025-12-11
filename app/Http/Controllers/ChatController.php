@@ -147,7 +147,8 @@ class ChatController extends Controller
 
         $request->validate([
             'message' => 'nullable|string|max:1000',
-            'file' => 'nullable|file|mimes:jpg,jpeg,png,gif,mp4,mov,avi,mp3,wav,pdf,doc,docx|max:10240', // 10MB limit
+            // Allow almost any file type except executables for security, max 20MB
+            'file' => 'nullable|file|mimes:jpg,jpeg,png,gif,webp,mp4,mov,avi,mp3,wav,pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,zip,rar,7z,tar,gz|max:20480',
         ]);
 
         $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
