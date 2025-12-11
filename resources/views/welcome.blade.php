@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="description" content="Conectamos clientes aos melhores profissionais de desbloqueio. Solicite orçamentos personalizados e receba serviços seguros e confiáveis.">
-    <meta name="keywords" content="desbloqueio de celulares, serviços de unlock, profissionais de desbloqueio, orçamento personalizado, renttool">
+    <meta name="description" content="Conectamos clientes aos melhores profissionais de reparo de software de celulares. Solicite orçamentos personalizados e receba serviços seguros e confiáveis.">
+    <meta name="keywords" content="reparo de software de celulares, serviços de software, profissionais de reparo, orçamento personalizado, renttool">
     
-    <title>renttool - Conectando Clientes aos Melhores Profissionais de Desbloqueio</title>
+    <title>renttool - Conectando Clientes aos Melhores Profissionais de Reparo de Software de Celulares</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
@@ -644,7 +644,7 @@
     <!-- Hero Section -->
     <section class="py-16 md:py-24 gradient-bg hero-pattern">
         <div class="container mx-auto px-4 text-center">
-            <h1 class="text-4xl md:text-5xl font-bold text-white mb-6">Conectando Clientes aos Melhores Profissionais de Desbloqueio</h1>
+            <h1 class="text-4xl md:text-5xl font-bold text-white mb-6">Conectando Clientes aos Melhores Profissionais de Reparo de Software de Celulares</h1>
             <p class="text-xl text-blue-100 max-w-2xl mx-auto mb-10">Solicite orçamentos personalizados e receba serviços seguros e confiáveis de profissionais especializados.</p>
             <div class="flex flex-col sm:flex-row justify-center gap-4">
                 <a href="#services" class="bg-white text-primary px-8 py-4 rounded-lg font-bold text-center hover:bg-slate-100 transition btn-primary shadow-lg">
@@ -720,7 +720,7 @@
         <div class="container mx-auto px-4">
             <div class="text-center mb-16">
                 <h2 class="text-3xl md:text-4xl font-bold text-slate-900 mb-4 dark:text-white">Como Funciona o renttool</h2>
-                <p class="text-slate-600 max-w-2xl mx-auto dark:text-slate-300">Processo simples para conectar você aos melhores profissionais de desbloqueio em minutos.</p>
+                <p class="text-slate-600 max-w-2xl mx-auto dark:text-slate-300">Processo simples para conectar você aos melhores profissionais de reparo de software em minutos.</p>
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
@@ -729,7 +729,7 @@
                         <span class="text-white font-bold text-xl">1</span>
                     </div>
                     <h3 class="font-bold text-xl text-slate-900 mb-3 dark:text-white">Escolha o Serviço</h3>
-                    <p class="text-slate-600 dark:text-slate-300">Navegue em nossa seleção de serviços de desbloqueio e selecione o que você precisa.</p>
+                    <p class="text-slate-600 dark:text-slate-300">Navegue em nossa seleção de serviços de reparo de software e selecione o que você precisa.</p>
                 </div>
                 
                 <div class="text-center p-6 feature-card bg-white rounded-2xl shadow-sm dark:bg-slate-800">
@@ -764,7 +764,7 @@
         <div class="container mx-auto px-4">
             <div class="text-center mb-16">
                 <h2 class="text-3xl md:text-4xl font-bold text-slate-900 mb-4 dark:text-white">Benefícios do renttool</h2>
-                <p class="text-slate-600 max-w-2xl mx-auto dark:text-slate-300">Plataforma que conecta clientes e profissionais de desbloqueio com segurança e eficiência.</p>
+                <p class="text-slate-600 max-w-2xl mx-auto dark:text-slate-300">Plataforma que conecta clientes e profissionais de reparo de software com segurança e eficiência.</p>
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -814,8 +814,8 @@
     <!-- CTA -->
     <section class="py-16 gradient-bg hero-pattern">
         <div class="container mx-auto px-4 text-center">
-            <h2 class="text-3xl md:text-4xl font-bold text-white mb-6">Pronto para Começar a Desbloquear FRP?</h2>
-            <p class="text-blue-100 max-w-2xl mx-auto mb-8 text-lg">Junte-se a milhares de profissionais que confiam no renttool para suas necessidades de desbloqueio.</p>
+            <h2 class="text-3xl md:text-4xl font-bold text-white mb-6">Pronto para Começar o Reparo de Software?</h2>
+            <p class="text-blue-100 max-w-2xl mx-auto mb-8 text-lg">Junte-se a milhares de profissionais que confiam no renttool para suas necessidades de reparo de software.</p>
             <div class="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
                 <a href="#tools" class="bg-white text-primary px-8 py-3 rounded-lg font-bold text-center hover:bg-slate-100 transition btn-primary shadow-lg dark:bg-slate-200 dark:text-slate-800">
                     Ver Ferramentas
@@ -829,7 +829,7 @@
         <div class="container mx-auto px-4">
             <div class="text-center mb-16">
                 <h2 class="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Perguntas Frequentes</h2>
-                <p class="text-slate-600 max-w-2xl mx-auto">Tudo o que você precisa saber sobre conectar-se a profissionais de desbloqueio.</p>
+                <p class="text-slate-600 max-w-2xl mx-auto">Tudo o que você precisa saber sobre conectar-se a profissionais de reparo de software.</p>
             </div>
             
             <div class="max-w-3xl mx-auto">
@@ -867,7 +867,7 @@
                         </div>
                         <h2 class="text-2xl font-bold">renttool<span class="text-primary">.com</span></h2>
                     </div>
-                    <p class="text-slate-400 mb-6">Aluguel profissional de ferramentas de desbloqueio FRP. Economize dinheiro com nosso sistema de preços por hora.</p>
+                    <p class="text-slate-400 mb-6">Aluguel profissional de ferramentas de reparo de software de celulares. Economize dinheiro com nosso sistema de preços por hora.</p>
                     <div class="flex space-x-4">
                         <a href="#" class="text-slate-400 hover:text-white">
                             <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/></svg>
@@ -902,7 +902,7 @@
             </div>
             
             <div class="border-t border-slate-800 mt-12 pt-8 text-center text-slate-400">
-                <p>&copy; 2025 renttool.com. Todos os direitos reservados. Aluguel profissional de ferramentas de desbloqueio FRP. --Projetado por @Matheus.britto.dev</p>
+                <p>&copy; 2025 renttool.com. Todos os direitos reservados. Aluguel profissional de ferramentas de reparo de software de celulares. --Projetado por @Matheus.britto.dev</p>
             </div>
         </div>
     </footer>
@@ -1398,7 +1398,7 @@
                                     <p class="text-slate-600 text-sm">${marcaNome}</p>
                                 </div>
                             </div>
-                            <p class="text-slate-600 mb-4">${service.descricao || 'Serviço profissional de desbloqueio especializado.'}</p>
+                            <p class="text-slate-600 mb-4">${service.descricao || 'Serviço profissional de reparo de software especializado.'}</p>
                             <div class="flex justify-center">
                                 <button class="request-quote-btn bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition btn-primary" data-service-id="${service.id}">
                                     Solicitar Orçamento
