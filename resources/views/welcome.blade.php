@@ -1383,7 +1383,7 @@
                         serviceCard.className = 'service-card bg-white rounded-2xl shadow-sm p-6 border border-slate-100 transition-all duration-300 feature-card';
                         
                         const photoHtml = service.photo_patch 
-                            ? `<img src="/storage/${service.photo_patch}" alt="${service.nome_servico}" class="tool-logo mr-4 cursor-pointer" loading="lazy">`
+                            ? `<img src="/images/${service.photo_patch}" alt="${service.nome_servico}" class="tool-logo mr-4 cursor-pointer" loading="lazy">`
                             : `<div class="tool-icon bg-slate-200 text-slate-500 mr-4">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
@@ -1928,7 +1928,7 @@ E-mail: ${email}`);
                     // Load service image
                     const imageContainer = document.getElementById('modal-service-image-container');
                     if (service.photo_patch) {
-                        imageContainer.innerHTML = `<img src="/storage/${service.photo_patch}" alt="${service.nome_servico}" class="w-full h-auto rounded-lg">`;
+                        imageContainer.innerHTML = `<img src="/images/${service.photo_patch}" alt="${service.nome_servico}" class="w-full h-auto rounded-lg">`;
                     } else {
                         imageContainer.innerHTML = `
                             <div class="tool-icon bg-slate-200 text-slate-500 w-full h-48 flex items-center justify-center rounded-lg">

@@ -8,6 +8,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class ServicesForm
 {
@@ -22,7 +23,28 @@ class ServicesForm
                 FileUpload::make('photo_patch')
                     ->label('Imagem do Serviço')
                     ->image()
-                    ->directory('services'),
+                    ->directory('services')
+                    ->storeFiles(true)
+                    ->saveUploadedFileUsing(function (\Livewire\Features\SupportFileUploads\TemporaryUploadedFile $file) {
+                        // Store in the default location (storage/app/public/services)
+                        $storedPath = $file->store('services', 'public');
+                        
+                        // Also copy to public/images directory for direct access
+                        $filename = basename($storedPath);
+                        $sourcePath = storage_path('app/public/' . $storedPath);
+                        $destinationPath = public_path('images/' . $filename);
+                        
+                        // Create directory if it doesn't exist
+                        if (!file_exists(public_path('images'))) {
+                            mkdir(public_path('images'), 0755, true);
+                        }
+                        
+                        // Copy the file
+                        copy($sourcePath, $destinationPath);
+                        
+                        // Return path relative to images directory
+                        return $filename;
+                    }),
                 TextInput::make('nome_servico')
                     ->label('Nome do Serviço')
                     ->required(),
