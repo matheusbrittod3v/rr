@@ -16,7 +16,6 @@ class Payment extends Model
         'gateway_id',
         'status',
         'status_notification_sent', // Add this field
-        'tool_id',
         'orcamento_id',
         'number_whatsapp',
         'email',
@@ -54,12 +53,6 @@ class Payment extends Model
     public function gateway()
     {
         return $this->belongsTo(GatewayPagamento::class, 'gateway_id');
-    }
-
-    // Relacionamento com Tool
-    public function tool()
-    {
-        return $this->belongsTo(Tool::class, 'tool_id');
     }
     
     // Relacionamento com Orcamento

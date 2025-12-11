@@ -35,9 +35,11 @@ class PaymentsTable
                 TextColumn::make('status')
                     ->badge()
                     ->searchable(),
-                TextColumn::make('tool_id')
-                    ->numeric()
-                    ->sortable(),
+                TextColumn::make('orcamento.prestador.name')
+                    ->label('Prestador')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('number_whatsapp')
                     ->searchable(),
                 TextColumn::make('email')
@@ -55,7 +57,7 @@ class PaymentsTable
             ->filters([
                 SelectFilter::make('status')
                     ->options(Payment::getStatusOptions())
-                    ->multiple()
+                    ->multiple(),
             ])
             ->recordActions([
                 ViewAction::make(),
