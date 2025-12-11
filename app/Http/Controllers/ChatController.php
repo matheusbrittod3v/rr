@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ChatRoom;
 use App\Models\ChatMessage;
+use App\Models\ChatSignal;
 use App\Models\Payment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -208,6 +209,82 @@ class ChatController extends Controller
         return response()->json([
             'success' => true,
             'messages' => $messages
+        ]);
+    }
+    
+    /**
+     * Send a signaling message for WebRTC via AJAX.
+     */
+    public function sendSignal(Request $request, $roomCode)
+    {
+        $isAdmin = Auth::check() && Auth::user()->can('access_admin_chat');
+
+        if (! $isAdmin && session('authenticated_chat_room') !== $roomCode) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $request->validate([
+            'type' => 'required|string', // offer, answer, candidate
+            'payload' => 'required', // json or array
+        ]);
+
+        $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
+
+        // Determine sender type
+        $senderType = 'client';
+        if ($isAdmin) {
+            $senderType = 'admin';
+        } elseif (session('chat_user_role')) {
+            $senderType = session('chat_user_role');
+        } elseif (session('authenticated_from_payment')) {
+            $senderType = 'client';
+        }
+
+        // Store signal in database
+        ChatSignal::create([
+            'chat_room_id' => $chatRoom->id,
+            'sender_type' => $senderType,
+            'type' => $request->type,
+            'payload' => is_array($request->payload) ? json_encode($request->payload) : $request->payload,
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Fetch signaling messages for WebRTC via AJAX.
+     */
+    public function fetchSignals(Request $request, $roomCode)
+    {
+        $isAdmin = Auth::check() && Auth::user()->can('access_admin_chat');
+
+        if (! $isAdmin && session('authenticated_chat_room') !== $roomCode) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
+        $lastSignalId = $request->query('last_signal_id', 0);
+
+        // Determine current user type to avoid fetching own signals
+        $currentUserType = 'client';
+        if ($isAdmin) {
+            $currentUserType = 'admin';
+        } elseif (session('chat_user_role')) {
+            $currentUserType = session('chat_user_role');
+        }
+
+        // Fetch signals from OTHER participants
+        // Note: admin is treated as a separate type, so admin receives client/provider signals and vice versa
+        // Simplification: Fetch all signals not from me
+        $signals = ChatSignal::where('chat_room_id', $chatRoom->id)
+            ->where('id', '>', $lastSignalId)
+            ->where('sender_type', '!=', $currentUserType)
+            ->where('created_at', '>=', now()->subMinutes(2)) // Only recent signals
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'signals' => $signals
         ]);
     }
 
