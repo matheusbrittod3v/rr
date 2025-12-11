@@ -1,0 +1,36 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('payments', function (Blueprint $table) {
+            $table->id();
+            $table->string('tx_id')->unique();
+            $table->decimal('valor', 10, 2);
+            $table->unsignedBigInteger('gateway_id');
+            $table->string('status')->default('nao pago'); // 'nao pago' ou 'pago'
+            $table->unsignedBigInteger('tool_id');
+            $table->timestamps();
+            
+            // Adicionando as chaves estrangeiras
+            $table->foreign('gateway_id')->references('id')->on('gateway_pagamentos')->onDelete('cascade');
+            $table->foreign('tool_id')->references('id')->on('tools')->onDelete('cascade');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('payments');
+    }
+};
