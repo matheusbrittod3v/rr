@@ -29,14 +29,9 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->profile(\App\Filament\Pages\Auth\EditProfile::class)
             ->colors([
                 'primary' => Color::Amber,
-            ])
-            ->userMenuItems([
-                'profile' => \Filament\Navigation\MenuItem::make()
-                    ->label('Profile')
-                    ->url(fn () => \App\Filament\Pages\Profile::getUrl())
-                    ->icon('heroicon-o-user-circle'),
             ])
             ->sidebarCollapsibleOnDesktop() // Makes the sidebar collapsible on desktop
             ->navigationGroups([
