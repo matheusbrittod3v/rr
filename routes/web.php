@@ -12,15 +12,15 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\WhatsApiController;
+use App\Http\Controllers\RegistrationLinkController;
 
 Route::get('/', [HomeController::class, 'index']);
 
 Route::get('/sitemap.xml', [SitemapController::class, 'index']);
 
-Route::get('/register', function () {
-
-    return json_encode("hello word ");
-})->name('register');
+// Registration Link Routes
+Route::get('/register/{token}', [RegistrationLinkController::class, 'showRegistrationForm'])->name('register.show');
+Route::post('/register/{token}', [RegistrationLinkController::class, 'register'])->name('register.submit');
 
 // WebSocket test page
 Route::get('/websocket-test', function () {
