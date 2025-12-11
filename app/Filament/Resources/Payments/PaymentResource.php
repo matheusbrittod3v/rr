@@ -31,8 +31,14 @@ class PaymentResource extends Resource
         
         $user = auth()->user();
         if ($user && !$user->can('view_all_data') && !$user->hasRole('admin')) {
-             // Cliente: filtrar por email
-             $query->where('email', $user->email);
+             if ($user->isProvider()) {
+                  $query->whereHas('orcamento', function ($q) use ($user) {
+                      $q->where('prestador_id', $user->id);
+                  });
+             } else {
+                  // Cliente: filtrar por email
+                  $query->where('email', $user->email);
+             }
         }
         
         return $query;

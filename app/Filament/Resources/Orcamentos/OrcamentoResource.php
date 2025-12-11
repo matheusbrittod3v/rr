@@ -34,9 +34,7 @@ class OrcamentoResource extends Resource
         if ($user && !$user->can('view_all_data') && !$user->hasRole('admin')) {
              if ($user->isProvider()) {
                   // Filtrar orçamentos atribuídos ao prestador
-                  // Assumindo que o user->id é mapeado, ou filtrar por fila (complexo sem ver FilaPrestador)
-                  // Simplificação: Filtro apenas para admin/cliente por enquanto se lógica de provider for complexa
-                  // Mas o requisito pede filtro.
+                  $query->where('prestador_id', $user->id);
              } else {
                   // Cliente: email
                   $query->where('email', $user->email);

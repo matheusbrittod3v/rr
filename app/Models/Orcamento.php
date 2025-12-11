@@ -2,12 +2,11 @@
 
 namespace App\Models;
 
+use App\Jobs\AssignBudgetToProviderJob;
+use App\Jobs\CheckProviderQueueJob;
+use App\Models\FilaOrcamento as FilaOrcamentoModel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Jobs\CheckProviderQueueJob;
-use App\Jobs\AssignBudgetToProviderJob;
-use App\Models\FilaOrcamento as FilaOrcamentoModel;
-use App\Models\Service;
 
 class Orcamento extends Model
 {
@@ -21,12 +20,13 @@ class Orcamento extends Model
         'aceito',
         'status',
         'id_orcamento',
-        'service_id'
+        'service_id',
+        'prestador_id',
     ];
 
     protected $casts = [
         'informacoes_adicionais' => 'array',
-        'valor' => 'decimal:2'
+        'valor' => 'decimal:2',
     ];
 
     /**
@@ -44,7 +44,7 @@ class Orcamento extends Model
             // Cria entrada na fila
             $fila = FilaOrcamentoModel::create([
                 'orcamento_id' => $orcamento->id,
-                'prestador_id' => null
+                'prestador_id' => null,
             ]);
 
             // Dispara jobs
@@ -61,11 +61,16 @@ class Orcamento extends Model
     public function filaOrcamentoWithProvider()
     {
         return $this->hasOne(FilaOrcamentoModel::class, 'orcamento_id')
-                    ->with('prestador');
+            ->with('prestador');
     }
-    
+
     public function service()
     {
         return $this->belongsTo(Service::class, 'service_id');
+    }
+
+    public function prestador()
+    {
+        return $this->belongsTo(User::class, 'prestador_id');
     }
 }
