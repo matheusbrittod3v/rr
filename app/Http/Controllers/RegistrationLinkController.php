@@ -38,6 +38,7 @@ class RegistrationLinkController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+            'numero' => ['required', 'string', 'max:20'],
             'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
@@ -45,6 +46,7 @@ class RegistrationLinkController extends Controller
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
+            'numero' => $validated['numero'],
             'password' => Hash::make($validated['password']),
             'is_provider' => $link->is_provider,
         ]);
