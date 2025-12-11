@@ -94,33 +94,3 @@ Route::get('/whatsapp/connection-status', [WhatsApiController::class, 'getConnec
 // WhatsApp Groups endpoints (única instância - uso interno)
 Route::get('/whatsapp/groups', [WhatsApiController::class, 'getGroups'])->middleware('auth');
 Route::post('/whatsapp/groups/save', [WhatsApiController::class, 'saveSelectedGroups'])->middleware('auth');
-
-// Route to serve images directly from public/images directory (for shared hosting without symlink support)
-Route::get('/images/{path}', function (string $path) {
-    // Security check: prevent directory traversal
-    if (strpos($path, '..') !== false || strpos($path, './') !== false) {
-        abort(404);
-    }
-    
-    // Define the public images path
-    $publicImagePath = public_path('images/' . $path);
-    
-    // Check if file exists
-    if (!file_exists($publicImagePath)) {
-        abort(404);
-    }
-    
-    // Check if it's actually a file
-    if (!is_file($publicImagePath)) {
-        abort(404);
-    }
-    
-    // Get mime type
-    $mimeType = mime_content_type($publicImagePath);
-    
-    // Return the file with proper headers
-    return response()->file($publicImagePath, [
-        'Content-Type' => $mimeType,
-        'Cache-Control' => 'public, max-age=31536000'
-    ]);
-})->where('path', '.*');
