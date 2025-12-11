@@ -2,19 +2,17 @@
 
 namespace App\Filament\Pages\Auth;
 
+use Filament\Auth\Pages\EditProfile as BaseEditProfile;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Form;
-use Filament\Pages\Auth\EditProfile as BaseEditProfile;
+use Filament\Schemas\Schema;
 
 class EditProfile extends BaseEditProfile
 {
-    public function form(Form $form): Form
+    public function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                TextInput::make('name')
-                    ->required()
-                    ->maxLength(255),
+        return $schema
+            ->components([
+                $this->getNameFormComponent(),
                 $this->getEmailFormComponent(),
                 TextInput::make('numero')
                     ->label('Phone Number')
