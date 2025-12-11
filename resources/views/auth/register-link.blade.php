@@ -133,6 +133,24 @@
                         >
                     </div>
 
+                    <!-- Phone Number -->
+                    <div>
+                        <label for="numero" class="block text-sm font-semibold text-gray-700 mb-2">
+                            Phone Number
+                        </label>
+                        <input 
+                            id="numero" 
+                            type="tel" 
+                            name="numero" 
+                            value="{{ old('numero') }}" 
+                            required 
+                            autocomplete="tel"
+                            class="input-focus w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:ring-0 transition-all duration-200 text-gray-800"
+                            placeholder="+55 11 99999-9999"
+                        >
+                        <p class="mt-1 text-xs text-gray-500">Include country code (e.g., +55 for Brazil)</p>
+                    </div>
+
                     <!-- Password -->
                     <div>
                         <label for="password" class="block text-sm font-semibold text-gray-700 mb-2">
