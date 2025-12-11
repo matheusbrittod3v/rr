@@ -7,9 +7,9 @@ use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
-use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 
@@ -40,10 +40,11 @@ class Profile extends Page implements HasForms
         ]);
     }
 
-    public function form(Form $form): Form
+    public function schema(Schema $schema): Schema
     {
-        return $form
-            ->schema([
+        return $schema
+            ->statePath('data')
+            ->components([
                 Section::make('Personal Information')
                     ->description('Update your personal details here.')
                     ->schema([
@@ -100,8 +101,7 @@ class Profile extends Page implements HasForms
                     ->columns(3)
                     ->collapsible()
                     ->collapsed(),
-            ])
-            ->statePath('data');
+            ]);
     }
 
     public function save(): void
