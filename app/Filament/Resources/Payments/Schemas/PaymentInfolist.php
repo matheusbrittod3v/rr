@@ -21,8 +21,9 @@ class PaymentInfolist
                     ->numeric(),
                 TextEntry::make('status')
                     ->badge(),
-                TextEntry::make('tool_id')
-                    ->numeric(),
+                TextEntry::make('orcamento.prestador.name')
+                    ->label('Prestador')
+                    ->placeholder('-'),
                 TextEntry::make('number_whatsapp')
                     ->placeholder('-'),
                 TextEntry::make('email')

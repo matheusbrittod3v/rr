@@ -28,9 +28,6 @@ class PaymentForm
                     ->options(Payment::getStatusOptions())
                     ->default('nao pago')
                     ->required(),
-                TextInput::make('tool_id')
-                    ->required()
-                    ->numeric(),
                 TextInput::make('number_whatsapp')
                     ->default(null),
                 TextInput::make('email')
