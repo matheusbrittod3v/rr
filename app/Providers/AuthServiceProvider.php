@@ -22,6 +22,14 @@ use App\Policies\RolePolicy;
 use App\Policies\ServicePolicy;
 use App\Policies\UserPolicy;
 use App\Policies\WhatsApiPolicy;
+use App\Models\ChatRoom;
+use App\Policies\ChatRoomPolicy;
+use App\Models\Orcamento;
+use App\Policies\OrcamentoPolicy;
+use App\Models\FilaOrcamento;
+use App\Policies\FilaOrcamentoPolicy;
+use App\Models\FilaPrestador;
+use App\Policies\FilaPrestadorPolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 use Illuminate\Support\Facades\Gate;
 
@@ -43,6 +51,10 @@ class AuthServiceProvider extends ServiceProvider
         GatewayPagamento::class => GatewayPagamentoPolicy::class,
         WhatsApi::class => WhatsApiPolicy::class,
         CustomDashboard::class => DashboardPolicy::class,
+        ChatRoom::class => ChatRoomPolicy::class,
+        Orcamento::class => OrcamentoPolicy::class,
+        FilaOrcamento::class => FilaOrcamentoPolicy::class,
+        FilaPrestador::class => FilaPrestadorPolicy::class,
     ];
 
     /**

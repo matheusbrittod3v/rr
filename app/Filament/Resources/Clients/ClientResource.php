@@ -84,6 +84,11 @@ class ClientResource extends Resource
             });
     }
     
+    public static function canViewAny(): bool
+    {
+        return auth()->user()->can('view_clients');
+    }
+
     public static function canCreate(): bool
     {
         return false;
@@ -96,11 +101,11 @@ class ClientResource extends Resource
     
     public static function canDelete($record): bool
     {
-        return false;
+        return auth()->user()->can('delete_clients');
     }
     
     public static function canDeleteAny(): bool
     {
-        return false;
+        return auth()->user()->can('delete_clients');
     }
 }
