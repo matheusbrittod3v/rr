@@ -22,7 +22,11 @@ class LatestBudgetsWidget extends BaseWidget
         
         $user = auth()->user();
         if ($user && !$user->can('view_all_data') && !$user->hasRole('admin')) {
-             $query->where('email', $user->email);
+             if ($user->isProvider()) {
+                 $query->where('prestador_id', $user->id);
+             } else {
+                 $query->where('email', $user->email);
+             }
         }
         
         $query->latest()->limit(5);
