@@ -13,9 +13,7 @@ use App\Models\Marca;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Gate;
 
 class MarcaResource extends Resource
 {

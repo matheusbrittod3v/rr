@@ -26,7 +26,19 @@
                         </div>
                     </div>
                     <div class="flex items-center space-x-2">
-                        <span class="hidden sm:inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white/20 text-white backdrop-blur-sm">
+                        <!-- Call Buttons (WebRTC Placeholders) -->
+                        <button id="voice-call-btn" class="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-sm" title="Chamada de Voz">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                            </svg>
+                        </button>
+                        <button id="video-call-btn" class="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-sm" title="Chamada de Vídeo">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                        </button>
+
+                        <span class="hidden sm:inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white/20 text-white backdrop-blur-sm ml-2">
                             {{ $chatRoom->room_code }}
                         </span>
                         <a href="{{ url('/') }}" class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-white/10 text-white hover:bg-white/20 transition-all backdrop-blur-sm">
@@ -83,39 +95,51 @@
                     <div class="mb-4 animate-fade-in" data-message-id="{{ $message->id }}">
                         <div class="flex {{ $message->sender_type === 'client' ? 'justify-end' : 'justify-start' }}">
                             <div class="max-w-xs sm:max-w-md lg:max-w-lg">
-                                <!-- Message bubble -->
-                                <div class="px-4 py-3 rounded-2xl shadow-sm {{ $message->sender_type === 'client' ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-sm' : 'bg-white text-gray-800 border border-gray-200 rounded-bl-sm' }}">
-                                    @if($message->message)
-                                        <p class="text-sm break-words">{{ $message->message }}</p>
+                                <div class="flex items-end gap-2 {{ $message->sender_type === 'client' ? 'flex-row-reverse' : 'flex-row' }}">
+                                    <!-- Sender Avatar/Initial usually implied by side, but for Admin lets show -->
+                                    @if($message->sender_type === 'admin')
+                                        <div class="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-xs text-white" title="Admin">A</div>
                                     @endif
-                                    
-                                    @if($message->file_path)
-                                        @if(Str::startsWith($message->file_type, 'image/'))
-                                            <div class="mt-2 rounded-lg overflow-hidden">
-                                                <img src="{{ asset('storage/' . $message->file_path) }}" alt="Imagem" class="max-w-full h-auto rounded-lg">
-                                            </div>
-                                        @elseif(Str::startsWith($message->file_type, 'video/'))
-                                            <div class="mt-2 rounded-lg overflow-hidden">
-                                                <video controls class="max-w-full h-auto rounded-lg">
-                                                    <source src="{{ asset('storage/' . $message->file_path) }}" type="{{ $message->file_type }}">
-                                                    Seu navegador não suporta vídeos.
-                                                </video>
-                                            </div>
-                                        @else
-                                            <div class="mt-2 p-2 {{ $message->sender_type === 'client' ? 'bg-blue-400/30' : 'bg-gray-100' }} rounded-lg">
-                                                <a href="{{ asset('storage/' . $message->file_path) }}" target="_blank" class="{{ $message->sender_type === 'client' ? 'text-white' : 'text-blue-600' }} hover:underline flex items-center text-sm">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                                    </svg>
-                                                    Arquivo anexado
-                                                </a>
-                                            </div>
+
+                                    <!-- Message bubble -->
+                                    <div class="px-4 py-3 rounded-2xl shadow-sm {{ 
+                                        $message->sender_type === 'client' ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-sm' : 
+                                        ($message->sender_type === 'admin' ? 'bg-purple-100 text-purple-900 border border-purple-200 rounded-bl-sm' : 
+                                        'bg-white text-gray-800 border border-gray-200 rounded-bl-sm') 
+                                    }}">
+                                        @if($message->message)
+                                            <p class="text-sm break-words">{{ $message->message }}</p>
                                         @endif
-                                    @endif
-                                    
-                                    <p class="text-xs mt-1.5 {{ $message->sender_type === 'client' ? 'text-blue-100' : 'text-gray-500' }}">
-                                        {{ $message->created_at->format('H:i') }}
-                                    </p>
+                                        
+                                        @if($message->file_path)
+                                            @if(Str::startsWith($message->file_type, 'image/'))
+                                                <div class="mt-2 rounded-lg overflow-hidden">
+                                                    <img src="{{ asset('storage/' . $message->file_path) }}" alt="Imagem" class="max-w-full h-auto rounded-lg">
+                                                </div>
+                                            @elseif(Str::startsWith($message->file_type, 'video/'))
+                                                <div class="mt-2 rounded-lg overflow-hidden">
+                                                    <video controls class="max-w-full h-auto rounded-lg">
+                                                        <source src="{{ asset('storage/' . $message->file_path) }}" type="{{ $message->file_type }}">
+                                                        Seu navegador não suporta vídeos.
+                                                    </video>
+                                                </div>
+                                            @else
+                                                <div class="mt-2 p-2 {{ $message->sender_type === 'client' ? 'bg-blue-400/30' : 'bg-gray-100' }} rounded-lg">
+                                                    <a href="{{ asset('storage/' . $message->file_path) }}" target="_blank" class="{{ $message->sender_type === 'client' ? 'text-white' : 'text-blue-600' }} hover:underline flex items-center text-sm">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                                        </svg>
+                                                        Arquivo anexado
+                                                    </a>
+                                                </div>
+                                            @endif
+                                        @endif
+                                        
+                                        <p class="text-xs mt-1.5 {{ $message->sender_type === 'client' ? 'text-blue-100' : ($message->sender_type === 'admin' ? 'text-purple-400' : 'text-gray-500') }}">
+                                            @if($message->sender_type === 'admin') <strong>Admin</strong> • @endif
+                                            {{ $message->created_at->format('H:i') }}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -222,6 +246,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const fileName = document.getElementById('file-name');
     const removeFileBtn = document.getElementById('remove-file');
     const charCount = document.getElementById('char-count');
+    
+    // Call buttons (placeholders for now)
+    const voiceCallBtn = document.getElementById('voice-call-btn');
+    const videoCallBtn = document.getElementById('video-call-btn');
+
+    voiceCallBtn.addEventListener('click', () => {
+        alert('Funcionalidade de chamada de voz em desenvolvimento.');
+    });
+
+    videoCallBtn.addEventListener('click', () => {
+        alert('Funcionalidade de chamada de vídeo em desenvolvimento.');
+    });
     
     let lastMessageId = {{ $chatRoom->messages->last()->id ?? 0 }};
     let pollingInterval = null;
@@ -332,11 +368,19 @@ document.addEventListener('DOMContentLoaded', function() {
         messageDiv.dataset.messageId = message.id;
         
         const isClient = message.sender_type === 'client';
+        const isAdmin = message.sender_type === 'admin';
         const alignment = isClient ? 'justify-end' : 'justify-start';
-        const bubbleClass = isClient 
-            ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-sm' 
-            : 'bg-white text-gray-800 border border-gray-200 rounded-bl-sm';
-        const timeClass = isClient ? 'text-blue-100' : 'text-gray-500';
+        
+        let bubbleClass = 'bg-white text-gray-800 border border-gray-200 rounded-bl-sm';
+        let timeClass = 'text-gray-500';
+        
+        if (isClient) {
+            bubbleClass = 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-sm';
+            timeClass = 'text-blue-100';
+        } else if (isAdmin) {
+             bubbleClass = 'bg-purple-100 text-purple-900 border border-purple-200 rounded-bl-sm';
+             timeClass = 'text-purple-400';
+        }
         
         let fileHtml = '';
         if (message.file_path) {
@@ -353,13 +397,26 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const time = new Date(message.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
         
+        let adminBadge = '';
+        if (isAdmin) {
+            adminBadge = '<div class="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-xs text-white" title="Admin">A</div>';
+        }
+
+        const flexRow = isClient ? 'flex-row-reverse' : 'flex-row';
+
         messageDiv.innerHTML = `
             <div class="flex ${alignment}">
                 <div class="max-w-xs sm:max-w-md lg:max-w-lg">
-                    <div class="px-4 py-3 rounded-2xl shadow-sm ${bubbleClass}">
-                        ${message.message ? `<p class="text-sm break-words">${escapeHtml(message.message)}</p>` : ''}
-                        ${fileHtml}
-                        <p class="text-xs mt-1.5 ${timeClass}">${time}</p>
+                    <div class="flex items-end gap-2 ${flexRow}">
+                        ${adminBadge}
+                        <div class="px-4 py-3 rounded-2xl shadow-sm ${bubbleClass}">
+                            ${message.message ? `<p class="text-sm break-words">${escapeHtml(message.message)}</p>` : ''}
+                            ${fileHtml}
+                            <p class="text-xs mt-1.5 ${timeClass}">
+                                ${isAdmin ? '<strong>Admin</strong> • ' : ''}
+                                ${time}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
