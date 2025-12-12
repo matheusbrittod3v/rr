@@ -356,7 +356,9 @@ document.addEventListener('DOMContentLoaded', function() {
         callStartTime: null,
         callTimerInterval: null,
         processedSignalIds: new Set(), // Track processed signals to avoid duplicates
-        isAcceptingCall: false // Prevent multiple accept attempts
+        isAcceptingCall: false, // Prevent multiple accept attempts
+        connectionTimeout: null, // Timeout to detect stuck connections
+        answerReceived: false // Track if answer was received
     };
     
     // WebRTC Config
@@ -626,6 +628,13 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (connectionState === 'connected') {
                 console.log('Peer connection connected!');
+                
+                // Clear connection timeout
+                if (state.connectionTimeout) {
+                    clearTimeout(state.connectionTimeout);
+                    state.connectionTimeout = null;
+                }
+                
                 updateCallStatus('Conectado');
                 
                 // Verify transceivers and streams
@@ -733,6 +742,31 @@ document.addEventListener('DOMContentLoaded', function() {
             })));
             
             sendSignal('offer', offer);
+            
+            // Reset answer received flag
+            state.answerReceived = false;
+            
+            // Set timeout to detect if connection gets stuck
+            state.connectionTimeout = setTimeout(() => {
+                if (state.peerConnection) {
+                    const connectionState = state.peerConnection.connectionState;
+                    const iceState = state.peerConnection.iceConnectionState;
+                    console.warn('Connection timeout check:', {
+                        connectionState,
+                        iceState,
+                        answerReceived: state.answerReceived
+                    });
+                    
+                    if (!state.answerReceived) {
+                        console.warn('Answer not received after 30 seconds');
+                        updateCallStatus('Aguardando resposta...');
+                    } else if (connectionState !== 'connected' && connectionState !== 'connecting') {
+                        console.error('Connection appears to be stuck, state:', connectionState);
+                        updateCallStatus('Tentando reconectar...');
+                    }
+                }
+            }, 30000); // 30 seconds timeout
+            
             showCallOverlay();
             updateCallStatus('Chamando...');
         } catch (error) {
@@ -964,6 +998,29 @@ document.addEventListener('DOMContentLoaded', function() {
             sendSignal('answer', answer);
             console.log('Answer signal sent');
             
+            // Reset answer received flag
+            state.answerReceived = false;
+            
+            // Set timeout to detect if connection gets stuck
+            state.connectionTimeout = setTimeout(() => {
+                if (state.peerConnection) {
+                    const connectionState = state.peerConnection.connectionState;
+                    const iceState = state.peerConnection.iceConnectionState;
+                    console.warn('Connection timeout check:', {
+                        connectionState,
+                        iceState,
+                        answerReceived: state.answerReceived
+                    });
+                    
+                    if (connectionState !== 'connected' && connectionState !== 'connecting') {
+                        console.error('Connection appears to be stuck, state:', connectionState);
+                        updateCallStatus('Tentando reconectar...');
+                    } else if (iceState === 'checking' || iceState === 'disconnected') {
+                        console.warn('ICE connection seems stuck, state:', iceState);
+                    }
+                }
+            }, 30000); // 30 seconds timeout
+            
             showCallOverlay();
             updateCallStatus('Conectando...');
             
@@ -1021,12 +1078,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const sessionDescription = new RTCSessionDescription(cleanAnswer);
             await state.peerConnection.setRemoteDescription(sessionDescription);
             
+            // Mark answer as received
+            state.answerReceived = true;
+            
+            // Clear connection timeout if it exists
+            if (state.connectionTimeout) {
+                clearTimeout(state.connectionTimeout);
+                state.connectionTimeout = null;
+            }
+            
             console.log('Answer processed successfully, connection state:', state.peerConnection.connectionState);
-            updateCallStatus('Conectado');
-            startCallTimer();
-            setTimeout(() => {
-                elements.callStatus.classList.add('hidden');
-            }, 2000);
+            updateCallStatus('Conectando...');
         } catch (error) {
             console.error('Error handling answer:', error);
             if (error.message && error.message.includes('SDP')) {
@@ -1044,15 +1106,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
+            // Check if candidate is for a media line that exists
+            const transceivers = state.peerConnection.getTransceivers();
+            const sdpMLineIndex = candidate.sdpMLineIndex;
+            
+            // If candidate is for a media line that doesn't exist, skip it
+            if (sdpMLineIndex !== null && sdpMLineIndex >= transceivers.length) {
+                console.warn('Skipping candidate for non-existent media line:', {
+                    sdpMLineIndex,
+                    availableTransceivers: transceivers.length
+                });
+                return;
+            }
+            
             console.log('Processing incoming ICE candidate:', {
                 candidate: candidate.candidate,
-                sdpMLineIndex: candidate.sdpMLineIndex
+                sdpMLineIndex: candidate.sdpMLineIndex,
+                sdpMid: candidate.sdpMid
             });
             
             await state.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
             console.log('ICE candidate added successfully');
         } catch (error) {
-            console.error('Error handling candidate:', error, candidate);
+            // Some candidates may fail (e.g., for different media lines), that's OK
+            // Only log as error if it's not a common case
+            if (error.message && error.message.includes('sdpMLineIndex')) {
+                console.warn('Candidate skipped (wrong media line):', {
+                    sdpMLineIndex: candidate.sdpMLineIndex,
+                    error: error.message
+                });
+            } else {
+                console.error('Error handling candidate:', error, candidate);
+            }
         }
     }
 
@@ -1411,6 +1496,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function endCall(sendHangup = true) {
         stopCallTimer();
+        
+        // Clear connection timeout
+        if (state.connectionTimeout) {
+            clearTimeout(state.connectionTimeout);
+            state.connectionTimeout = null;
+        }
         
         if (sendHangup && state.inCall) {
             sendSignal('hangup', {});
