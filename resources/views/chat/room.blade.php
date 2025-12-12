@@ -518,16 +518,44 @@ document.addEventListener('DOMContentLoaded', function() {
         // Handle ICE candidates
         state.peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
+                console.log('Sending ICE candidate:', {
+                    candidate: event.candidate.candidate,
+                    sdpMLineIndex: event.candidate.sdpMLineIndex
+                });
                 sendSignal('candidate', event.candidate);
+            } else {
+                console.log('ICE candidate gathering completed');
             }
         };
         
         // Handle connection state
         state.peerConnection.onconnectionstatechange = () => {
-            console.log('Connection state:', state.peerConnection.connectionState);
-            if (state.peerConnection.connectionState === 'failed' || 
-                state.peerConnection.connectionState === 'disconnected') {
+            const connectionState = state.peerConnection.connectionState;
+            console.log('Connection state changed:', connectionState);
+            
+            if (connectionState === 'connected') {
+                updateCallStatus('Conectado');
+                startCallTimer();
+                setTimeout(() => {
+                    elements.callStatus.classList.add('hidden');
+                }, 2000);
+            } else if (connectionState === 'failed' || connectionState === 'disconnected') {
                 updateCallStatus('Conexão perdida');
+            } else if (connectionState === 'connecting') {
+                updateCallStatus('Conectando...');
+            }
+        };
+        
+        // Also log ICE connection state
+        state.peerConnection.oniceconnectionstatechange = () => {
+            const iceState = state.peerConnection.iceConnectionState;
+            console.log('ICE connection state:', iceState);
+            
+            if (iceState === 'connected' || iceState === 'completed') {
+                console.log('ICE connection established');
+            } else if (iceState === 'failed') {
+                console.error('ICE connection failed');
+                updateCallStatus('Falha na conexão ICE');
             }
         };
     }
@@ -769,10 +797,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
+            console.log('Creating answer...');
             const answer = await state.peerConnection.createAnswer();
+            console.log('Answer created, setting local description...', {
+                answerType: answer.type,
+                hasSDP: !!answer.sdp,
+                sdpLength: answer.sdp?.length
+            });
+            
             await state.peerConnection.setLocalDescription(answer);
+            console.log('Local description set, sending answer signal...');
             
             sendSignal('answer', answer);
+            console.log('Answer signal sent');
+            
             showCallOverlay();
             updateCallStatus('Conectando...');
             
@@ -797,7 +835,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function handleIncomingAnswer(answer) {
         try {
-            if (!state.peerConnection) return;
+            if (!state.peerConnection) {
+                console.warn('Received answer but no peer connection exists yet');
+                return;
+            }
+            
+            console.log('Processing incoming answer...', {
+                hasPeerConnection: !!state.peerConnection,
+                answerType: answer?.type,
+                hasSDP: !!answer?.sdp,
+                connectionState: state.peerConnection?.connectionState
+            });
             
             // Validate and clean answer
             if (!answer || !answer.type || !answer.sdp) {
@@ -816,8 +864,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 sdp: cleanedSDP
             };
             
+            console.log('Setting remote description with answer...');
             const sessionDescription = new RTCSessionDescription(cleanAnswer);
             await state.peerConnection.setRemoteDescription(sessionDescription);
+            
+            console.log('Answer processed successfully, connection state:', state.peerConnection.connectionState);
             updateCallStatus('Conectado');
             startCallTimer();
             setTimeout(() => {
@@ -835,10 +886,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function handleIncomingCandidate(candidate) {
         try {
-            if (!state.peerConnection) return;
+            if (!state.peerConnection) {
+                console.warn('Received candidate but no peer connection exists');
+                return;
+            }
+            
+            console.log('Processing incoming ICE candidate:', {
+                candidate: candidate.candidate,
+                sdpMLineIndex: candidate.sdpMLineIndex
+            });
+            
             await state.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            console.log('ICE candidate added successfully');
         } catch (error) {
-            console.error('Error handling candidate:', error);
+            console.error('Error handling candidate:', error, candidate);
         }
     }
 
@@ -1450,9 +1511,16 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                             }
                             
-                            // Ignore conflicting signals during active call
-                            if (state.inCall && (signal.type === 'offer' || signal.type === 'answer')) {
-                                console.warn('Ignored conflicting signal during active call:', signal.type, signal.id);
+                            // Ignore conflicting offers during active call, but allow answers (needed to complete connection)
+                            if (state.inCall && signal.type === 'offer') {
+                                console.warn('Ignored conflicting offer during active call:', signal.id);
+                                return;
+                            }
+                            
+                            // Allow answers even if inCall is true (they're needed to complete the connection)
+                            // But check if we already have a peer connection
+                            if (state.inCall && signal.type === 'answer' && !state.peerConnection) {
+                                console.warn('Ignored answer: no peer connection yet');
                                 return;
                             }
                             
