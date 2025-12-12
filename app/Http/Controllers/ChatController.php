@@ -242,11 +242,25 @@ class ChatController extends Controller
         }
 
         // Store signal in database
+        // Ensure payload is properly JSON encoded
+        $payload = $request->payload;
+        if (is_array($payload)) {
+            $payload = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        } elseif (is_string($payload)) {
+            // If it's already a JSON string, validate it
+            $decoded = json_decode($payload, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                // Re-encode to ensure proper formatting
+                $payload = json_encode($decoded, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            }
+            // If it's not valid JSON, use as is (shouldn't happen)
+        }
+        
         ChatSignal::create([
             'chat_room_id' => $chatRoom->id,
             'sender_type' => $senderType,
             'type' => $request->type,
-            'payload' => is_array($request->payload) ? json_encode($request->payload) : $request->payload,
+            'payload' => $payload,
         ]);
 
         return response()->json(['success' => true]);
