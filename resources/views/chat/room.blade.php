@@ -497,20 +497,111 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Add local stream tracks
         if (state.localStream) {
-            state.localStream.getTracks().forEach(track => {
-                state.peerConnection.addTrack(track, state.localStream);
+            const tracks = state.localStream.getTracks();
+            console.log('Adding local tracks to peer connection:', {
+                totalTracks: tracks.length,
+                videoTracks: tracks.filter(t => t.kind === 'video').length,
+                audioTracks: tracks.filter(t => t.kind === 'audio').length
             });
+            
+            tracks.forEach(track => {
+                console.log(`Adding local ${track.kind} track:`, {
+                    enabled: track.enabled,
+                    readyState: track.readyState,
+                    muted: track.muted
+                });
+                const sender = state.peerConnection.addTrack(track, state.localStream);
+                console.log(`Track added, sender:`, {
+                    track: sender.track?.kind,
+                    transport: sender.transport?.state
+                });
+            });
+        } else {
+            console.warn('No local stream available when creating peer connection');
         }
         
         // Handle remote stream
         state.peerConnection.ontrack = (event) => {
-            const [remoteStream] = event.streams;
-            state.remoteStream = remoteStream;
-            elements.remoteVideo.srcObject = remoteStream;
-            elements.minimizedRemoteVideo.srcObject = remoteStream;
+            console.log('Received remote track:', {
+                kind: event.track.kind,
+                id: event.track.id,
+                streams: event.streams.length,
+                trackEnabled: event.track.enabled,
+                trackReadyState: event.track.readyState
+            });
             
-            // Start timer when connection is established
+            // Get the remote stream from the event
+            let remoteStream = null;
+            if (event.streams && event.streams.length > 0) {
+                remoteStream = event.streams[0];
+            } else {
+                // If no stream in event, create one or use existing
+                if (!state.remoteStream) {
+                    remoteStream = new MediaStream();
+                    state.remoteStream = remoteStream;
+                } else {
+                    remoteStream = state.remoteStream;
+                }
+                remoteStream.addTrack(event.track);
+            }
+            
+            // Update state
+            state.remoteStream = remoteStream;
+            
+            // Assign to video elements
+            if (remoteStream) {
+                console.log('Assigning remote stream to video elements...', {
+                    videoTracks: remoteStream.getVideoTracks().length,
+                    audioTracks: remoteStream.getAudioTracks().length
+                });
+                
+                // Ensure video elements are set to autoplay before assigning stream
+                elements.remoteVideo.autoplay = true;
+                elements.remoteVideo.playsInline = true;
+                elements.remoteVideo.muted = false; // Ensure audio plays
+                elements.minimizedRemoteVideo.autoplay = true;
+                elements.minimizedRemoteVideo.playsInline = true;
+                elements.minimizedRemoteVideo.muted = false;
+                
+                // Assign stream
+                elements.remoteVideo.srcObject = remoteStream;
+                elements.minimizedRemoteVideo.srcObject = remoteStream;
+                
+                // Try to play explicitly
+                elements.remoteVideo.play().then(() => {
+                    console.log('Remote video started playing');
+                }).catch(err => {
+                    console.error('Error playing remote video:', err);
+                });
+                
+                elements.minimizedRemoteVideo.play().then(() => {
+                    console.log('Minimized remote video started playing');
+                }).catch(err => {
+                    console.error('Error playing minimized remote video:', err);
+                });
+                
+                // Add event listeners to detect when video starts
+                elements.remoteVideo.addEventListener('playing', () => {
+                    console.log('Remote video is now playing');
+                });
+                
+                elements.remoteVideo.addEventListener('loadedmetadata', () => {
+                    console.log('Remote video metadata loaded');
+                });
+                
+                // Log track states
+                remoteStream.getTracks().forEach(track => {
+                    console.log(`Remote ${track.kind} track:`, {
+                        enabled: track.enabled,
+                        readyState: track.readyState,
+                        muted: track.muted
+                    });
+                });
+            }
+            
+            // Start timer when we receive first track
             if (state.inCall && !state.callStartTime) {
+                console.log('First remote track received, starting timer');
                 startCallTimer();
             }
         };
@@ -534,12 +625,34 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Connection state changed:', connectionState);
             
             if (connectionState === 'connected') {
+                console.log('Peer connection connected!');
                 updateCallStatus('Conectado');
+                
+                // Verify transceivers and streams
+                const transceivers = state.peerConnection.getTransceivers();
+                console.log('Transceivers:', transceivers.map(t => ({
+                    kind: t.receiver.track?.kind,
+                    direction: t.direction,
+                    currentDirection: t.currentDirection,
+                    receiverTrack: t.receiver.track?.enabled
+                })));
+                
+                // Check if we have remote stream
+                if (state.remoteStream) {
+                    console.log('Remote stream available:', {
+                        videoTracks: state.remoteStream.getVideoTracks().length,
+                        audioTracks: state.remoteStream.getAudioTracks().length
+                    });
+                } else {
+                    console.warn('No remote stream available after connection');
+                }
+                
                 startCallTimer();
                 setTimeout(() => {
                     elements.callStatus.classList.add('hidden');
                 }, 2000);
             } else if (connectionState === 'failed' || connectionState === 'disconnected') {
+                console.error('Connection failed or disconnected:', connectionState);
                 updateCallStatus('Conexão perdida');
             } else if (connectionState === 'connecting') {
                 updateCallStatus('Conectando...');
@@ -593,8 +706,31 @@ document.addEventListener('DOMContentLoaded', function() {
             await getLocalStream(isVideo);
             await createPeerConnection();
             
+            // Verify transceivers before creating offer
+            const transceivers = state.peerConnection.getTransceivers();
+            console.log('Transceivers before offer:', transceivers.map(t => ({
+                kind: t.receiver.track?.kind || t.sender.track?.kind || 'unknown',
+                direction: t.direction,
+                currentDirection: t.currentDirection
+            })));
+            
             const offer = await state.peerConnection.createOffer();
+            console.log('Offer created:', {
+                type: offer.type,
+                hasSDP: !!offer.sdp,
+                sdpLength: offer.sdp?.length
+            });
+            
             await state.peerConnection.setLocalDescription(offer);
+            console.log('Local description set (offer)');
+            
+            // Verify transceivers after setting local description
+            const transceiversAfter = state.peerConnection.getTransceivers();
+            console.log('Transceivers after offer:', transceiversAfter.map(t => ({
+                kind: t.receiver.track?.kind || t.sender.track?.kind || 'unknown',
+                direction: t.direction,
+                currentDirection: t.currentDirection
+            })));
             
             sendSignal('offer', offer);
             showCallOverlay();
@@ -798,6 +934,15 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             console.log('Creating answer...');
+            
+            // Ensure transceivers are configured correctly
+            const transceivers = state.peerConnection.getTransceivers();
+            console.log('Transceivers before answer:', transceivers.map(t => ({
+                kind: t.receiver.track?.kind || 'unknown',
+                direction: t.direction,
+                currentDirection: t.currentDirection
+            })));
+            
             const answer = await state.peerConnection.createAnswer();
             console.log('Answer created, setting local description...', {
                 answerType: answer.type,
@@ -807,6 +952,14 @@ document.addEventListener('DOMContentLoaded', function() {
             
             await state.peerConnection.setLocalDescription(answer);
             console.log('Local description set, sending answer signal...');
+            
+            // Verify transceivers after setting local description
+            const transceiversAfter = state.peerConnection.getTransceivers();
+            console.log('Transceivers after answer:', transceiversAfter.map(t => ({
+                kind: t.receiver.track?.kind || 'unknown',
+                direction: t.direction,
+                currentDirection: t.currentDirection
+            })));
             
             sendSignal('answer', answer);
             console.log('Answer signal sent');
