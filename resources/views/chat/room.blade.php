@@ -361,12 +361,19 @@ document.addEventListener('DOMContentLoaded', function() {
         answerReceived: false // Track if answer was received
     };
     
-    // WebRTC Config
+    // WebRTC Config with multiple STUN servers for better connectivity
     const rtcConfig = {
         iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
-        ]
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            { urls: 'stun:stun.stunprotocol.org:3478' },
+            { urls: 'stun:stun.voiparound.com' },
+            { urls: 'stun:stun.voipbuster.com' }
+        ],
+        iceCandidatePoolSize: 10
     };
     
     // Config
@@ -518,6 +525,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     transport: sender.transport?.state
                 });
             });
+            
+            // Ensure transceivers are configured for sendrecv (bidirectional)
+            const transceivers = state.peerConnection.getTransceivers();
+            transceivers.forEach(transceiver => {
+                if (transceiver.direction !== 'sendrecv') {
+                    console.log(`Setting transceiver direction to sendrecv for ${transceiver.receiver.track?.kind || 'unknown'}`);
+                    transceiver.direction = 'sendrecv';
+                }
+            });
         } else {
             console.warn('No local stream available when creating peer connection');
         }
@@ -565,31 +581,63 @@ document.addEventListener('DOMContentLoaded', function() {
                 elements.minimizedRemoteVideo.playsInline = true;
                 elements.minimizedRemoteVideo.muted = false;
                 
-                // Assign stream
-                elements.remoteVideo.srcObject = remoteStream;
-                elements.minimizedRemoteVideo.srcObject = remoteStream;
+                // Only assign stream if it's different (avoid interrupting play)
+                if (elements.remoteVideo.srcObject !== remoteStream) {
+                    elements.remoteVideo.srcObject = remoteStream;
+                }
+                if (elements.minimizedRemoteVideo.srcObject !== remoteStream) {
+                    elements.minimizedRemoteVideo.srcObject = remoteStream;
+                }
                 
-                // Try to play explicitly
-                elements.remoteVideo.play().then(() => {
-                    console.log('Remote video started playing');
-                }).catch(err => {
-                    console.error('Error playing remote video:', err);
-                });
+                // Wait a bit before trying to play to avoid interruption errors
+                setTimeout(() => {
+                    // Try to play explicitly, but only if not already playing
+                    if (elements.remoteVideo.paused) {
+                        elements.remoteVideo.play().then(() => {
+                            console.log('Remote video started playing');
+                        }).catch(err => {
+                            // Ignore AbortError (interrupted by new load)
+                            if (err.name !== 'AbortError') {
+                                console.error('Error playing remote video:', err);
+                                // Retry after a short delay
+                                setTimeout(() => {
+                                    elements.remoteVideo.play().catch(() => {});
+                                }, 500);
+                            }
+                        });
+                    }
+                    
+                    if (elements.minimizedRemoteVideo.paused) {
+                        elements.minimizedRemoteVideo.play().then(() => {
+                            console.log('Minimized remote video started playing');
+                        }).catch(err => {
+                            // Ignore AbortError (interrupted by new load)
+                            if (err.name !== 'AbortError') {
+                                console.error('Error playing minimized remote video:', err);
+                                // Retry after a short delay
+                                setTimeout(() => {
+                                    elements.minimizedRemoteVideo.play().catch(() => {});
+                                }, 500);
+                            }
+                        });
+                    }
+                }, 100);
                 
-                elements.minimizedRemoteVideo.play().then(() => {
-                    console.log('Minimized remote video started playing');
-                }).catch(err => {
-                    console.error('Error playing minimized remote video:', err);
-                });
-                
-                // Add event listeners to detect when video starts
-                elements.remoteVideo.addEventListener('playing', () => {
-                    console.log('Remote video is now playing');
-                });
-                
-                elements.remoteVideo.addEventListener('loadedmetadata', () => {
-                    console.log('Remote video metadata loaded');
-                });
+                // Add event listeners to detect when video starts (only once)
+                if (!elements.remoteVideo.hasAttribute('data-listener-added')) {
+                    elements.remoteVideo.setAttribute('data-listener-added', 'true');
+                    elements.remoteVideo.addEventListener('playing', () => {
+                        console.log('Remote video is now playing');
+                    });
+                    
+                    elements.remoteVideo.addEventListener('loadedmetadata', () => {
+                        console.log('Remote video metadata loaded');
+                        // Try to play when metadata is loaded
+                        if (elements.remoteVideo.paused) {
+                            elements.remoteVideo.play().catch(() => {});
+                        }
+                    });
+                }
                 
                 // Log track states
                 remoteStream.getTracks().forEach(track => {
@@ -660,9 +708,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 setTimeout(() => {
                     elements.callStatus.classList.add('hidden');
                 }, 2000);
-            } else if (connectionState === 'failed' || connectionState === 'disconnected') {
-                console.error('Connection failed or disconnected:', connectionState);
-                updateCallStatus('Conexão perdida');
+            } else if (connectionState === 'failed') {
+                console.error('Connection failed');
+                
+                // Try to restart ICE if connection failed
+                if (state.peerConnection && state.inCall) {
+                    console.log('Attempting to restart ICE...');
+                    try {
+                        state.peerConnection.restartIce();
+                        updateCallStatus('Reconectando...');
+                    } catch (restartError) {
+                        console.error('Error restarting ICE:', restartError);
+                        updateCallStatus('Conexão perdida');
+                    }
+                } else {
+                    updateCallStatus('Conexão perdida');
+                }
+            } else if (connectionState === 'disconnected') {
+                console.warn('Connection disconnected');
+                // Don't immediately show error, might reconnect
+                if (state.peerConnection && state.peerConnection.iceConnectionState === 'failed') {
+                    updateCallStatus('Conexão perdida');
+                } else {
+                    updateCallStatus('Reconectando...');
+                }
             } else if (connectionState === 'connecting') {
                 updateCallStatus('Conectando...');
             }
@@ -675,9 +744,32 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (iceState === 'connected' || iceState === 'completed') {
                 console.log('ICE connection established');
+                // Clear any error status
+                if (state.peerConnection.connectionState === 'connected') {
+                    updateCallStatus('Conectado');
+                }
             } else if (iceState === 'failed') {
                 console.error('ICE connection failed');
-                updateCallStatus('Falha na conexão ICE');
+                
+                // Try to restart ICE
+                if (state.peerConnection && state.inCall) {
+                    console.log('ICE failed, attempting restart...');
+                    try {
+                        state.peerConnection.restartIce();
+                        updateCallStatus('Reconectando...');
+                    } catch (restartError) {
+                        console.error('Error restarting ICE:', restartError);
+                        updateCallStatus('Falha na conexão ICE');
+                    }
+                } else {
+                    updateCallStatus('Falha na conexão ICE');
+                }
+            } else if (iceState === 'disconnected') {
+                console.warn('ICE disconnected, may reconnect');
+                // Don't show error immediately, might reconnect
+            } else if (iceState === 'checking') {
+                console.log('ICE checking...');
+                updateCallStatus('Conectando...');
             }
         };
     }
