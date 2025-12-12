@@ -645,6 +645,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 cleanedSDP = String(pendingOffer.sdp).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
             }
             
+            // Create a version without problematic ssrc/msid lines as backup
+            const sdpWithoutProblematicLines = cleanedSDP.split('\n')
+                .filter(line => {
+                    // Remove lines that have ssrc and msid but look problematic
+                    if (line.includes('ssrc:') && line.includes('msid:')) {
+                        // Check if line can be parsed correctly
+                        const match = line.match(/a=ssrc:\d+\s+msid:[a-f0-9\-]+\s+[a-f0-9\-]+/i);
+                        return match !== null; // Keep only if it matches the pattern
+                    }
+                    return true; // Keep all other lines
+                })
+                .join('\n');
+            
             // Validate SDP format before using
             if (!cleanedSDP.includes('v=') || !cleanedSDP.includes('m=')) {
                 console.error('SDP missing required fields:', {
@@ -689,8 +702,44 @@ document.addEventListener('DOMContentLoaded', function() {
                     ).slice(0, 3)
                 });
                 
-                // Try with original SDP as last resort
-                if (pendingOffer.sdp !== cleanedSDP) {
+                // Try with SDP without problematic lines
+                if (sdpWithoutProblematicLines !== cleanedSDP && sdpWithoutProblematicLines.length > 0) {
+                    console.log('Attempting with SDP without problematic ssrc/msid lines...');
+                    try {
+                        const cleanOfferNoProblematic = {
+                            type: pendingOffer.type,
+                            sdp: sdpWithoutProblematicLines
+                        };
+                        await state.peerConnection.setRemoteDescription(new RTCSessionDescription(cleanOfferNoProblematic));
+                        console.log('Success with SDP without problematic lines');
+                        // Update cleanedSDP for subsequent use
+                        cleanedSDP = sdpWithoutProblematicLines;
+                    } catch (noProblematicError) {
+                        console.warn('SDP without problematic lines also failed, trying original...');
+                        
+                        // Try with original SDP as last resort
+                        if (pendingOffer.sdp !== cleanedSDP) {
+                            try {
+                                const originalOffer = {
+                                    type: pendingOffer.type,
+                                    sdp: String(pendingOffer.sdp).replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+                                };
+                                await state.peerConnection.setRemoteDescription(new RTCSessionDescription(originalOffer));
+                                console.log('Success with original SDP');
+                            } catch (originalError) {
+                                console.error('All SDP attempts failed:', {
+                                    cleaned: sdpError.message,
+                                    noProblematic: noProblematicError.message,
+                                    original: originalError.message
+                                });
+                                throw sdpError; // Throw the original error
+                            }
+                        } else {
+                            throw sdpError;
+                        }
+                    }
+                } else if (pendingOffer.sdp !== cleanedSDP) {
+                    // Try with original SDP as last resort
                     console.log('Attempting with original SDP...');
                     try {
                         const originalOffer = {
@@ -829,19 +878,66 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Special handling for ssrc lines with msid
                 if (line.includes('ssrc:') && line.includes('msid:')) {
                     // Format: a=ssrc:ID msid:stream-id track-id
-                    // Ensure proper spacing between ssrc, msid, and track-id
+                    // Remove all non-printable characters first (keep only printable ASCII)
+                    line = line.replace(/[^\x20-\x7E]/g, '');
+                    // Remove any tabs and normalize spaces to single space
+                    line = line.replace(/[\t]+/g, ' ');
                     line = line.replace(/\s+/g, ' ').trim();
                     
-                    // Validate format: should have ssrc:ID msid:stream-id track-id
-                    const ssrcMatch = line.match(/a=ssrc:(\d+)\s+msid:([^\s]+)\s+([^\s]+)/);
-                    if (ssrcMatch) {
-                        // Reconstruct with proper format
+                    // Remove any leading/trailing spaces from the entire line
+                    line = line.trim();
+                    
+                    // Try to match and reconstruct the line
+                    // Pattern: a=ssrc:number msid:uuid uuid
+                    // More lenient regex to catch various formats
+                    let ssrcMatch = line.match(/a=ssrc:(\d+)\s+msid:([a-f0-9\-]+)\s+([a-f0-9\-]+)/i);
+                    
+                    if (!ssrcMatch) {
+                        // Try without the 'a=' prefix
+                        ssrcMatch = line.match(/ssrc:(\d+)\s+msid:([a-f0-9\-]+)\s+([a-f0-9\-]+)/i);
+                        if (ssrcMatch) {
+                            line = `a=ssrc:${ssrcMatch[1]} msid:${ssrcMatch[2]} ${ssrcMatch[3]}`;
+                        }
+                    } else {
+                        // Reconstruct with proper format - ensure single spaces
                         line = `a=ssrc:${ssrcMatch[1]} msid:${ssrcMatch[2]} ${ssrcMatch[3]}`;
                     }
+                    
+                    // If still can't parse, try to extract components manually
+                    if (!ssrcMatch) {
+                        const parts = line.split(/\s+/);
+                        const ssrcPart = parts.find(p => p.startsWith('ssrc:'));
+                        const msidPart = parts.find(p => p.startsWith('msid:'));
+                        const trackPart = parts.find((p, i) => i > parts.indexOf(msidPart) && !p.includes(':'));
+                        
+                        if (ssrcPart && msidPart && trackPart) {
+                            const ssrcId = ssrcPart.replace('ssrc:', '');
+                            const msid = msidPart.replace('msid:', '');
+                            line = `a=ssrc:${ssrcId} msid:${msid} ${trackPart}`;
+                        } else {
+                            // Last resort: try to create a minimal valid line
+                            // Extract just ssrc if possible, or remove entirely
+                            const ssrcOnly = line.match(/ssrc:(\d+)/);
+                            if (ssrcOnly) {
+                                // Create a minimal ssrc line without msid (less ideal but valid)
+                                line = `a=ssrc:${ssrcOnly[1]}`;
+                                console.warn('Simplified ssrc line (removed msid):', line);
+                            } else {
+                                // Remove the problematic line entirely (it's optional)
+                                console.warn('Removing unparseable ssrc line:', line);
+                                continue;
+                            }
+                        }
+                    }
                 } else {
-                    // For other a= lines, just normalize spaces
+                    // For other a= lines, just normalize spaces and remove non-printable chars
+                    line = line.replace(/[^\x20-\x7E\n]/g, '');
                     line = line.replace(/\s+/g, ' ').trim();
                 }
+            } else {
+                // For non-a= lines, also clean non-printable characters
+                line = line.replace(/[^\x20-\x7E\n]/g, '');
+                line = line.trim();
             }
             
             // Ensure proper line format
