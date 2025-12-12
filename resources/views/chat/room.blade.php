@@ -361,7 +361,14 @@ document.addEventListener('DOMContentLoaded', function() {
         answerReceived: false // Track if answer was received
     };
     
+    // Detect mobile device
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                     (navigator.maxTouchPoints && navigator.maxTouchPoints > 2 && /MacIntel/.test(navigator.platform));
+    
+    console.log('Device type:', isMobile ? 'Mobile' : 'Desktop');
+    
     // WebRTC Config with multiple STUN servers for better connectivity
+    // Mobile devices may need more aggressive ICE gathering
     const rtcConfig = {
         iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
@@ -373,7 +380,10 @@ document.addEventListener('DOMContentLoaded', function() {
             { urls: 'stun:stun.voiparound.com' },
             { urls: 'stun:stun.voipbuster.com' }
         ],
-        iceCandidatePoolSize: 10
+        iceCandidatePoolSize: isMobile ? 20 : 10, // More candidates for mobile
+        iceTransportPolicy: 'all', // Use both relay and host candidates
+        bundlePolicy: 'max-bundle', // Better for mobile
+        rtcpMuxPolicy: 'require' // Required for mobile compatibility
     };
     
     // Config
@@ -589,39 +599,37 @@ document.addEventListener('DOMContentLoaded', function() {
                     elements.minimizedRemoteVideo.srcObject = remoteStream;
                 }
                 
-                // Wait a bit before trying to play to avoid interruption errors
+                // Mobile needs more time and retries for play()
+                const playDelay = isMobile ? 300 : 100;
+                const maxRetries = isMobile ? 5 : 3;
+                let retryCount = 0;
+                
+                const tryPlayVideo = (videoElement, elementName) => {
+                    if (videoElement.paused) {
+                        videoElement.play().then(() => {
+                            console.log(`${elementName} started playing`);
+                        }).catch(err => {
+                            // Ignore AbortError (interrupted by new load)
+                            if (err.name !== 'AbortError' && retryCount < maxRetries) {
+                                retryCount++;
+                                console.warn(`${elementName} play failed, retry ${retryCount}/${maxRetries}:`, err.name);
+                                setTimeout(() => {
+                                    tryPlayVideo(videoElement, elementName);
+                                }, playDelay * retryCount);
+                            } else if (err.name !== 'AbortError') {
+                                console.error(`Error playing ${elementName} after ${maxRetries} retries:`, err);
+                            }
+                        });
+                    }
+                };
+                
                 setTimeout(() => {
-                    // Try to play explicitly, but only if not already playing
-                    if (elements.remoteVideo.paused) {
-                        elements.remoteVideo.play().then(() => {
-                            console.log('Remote video started playing');
-                        }).catch(err => {
-                            // Ignore AbortError (interrupted by new load)
-                            if (err.name !== 'AbortError') {
-                                console.error('Error playing remote video:', err);
-                                // Retry after a short delay
-                                setTimeout(() => {
-                                    elements.remoteVideo.play().catch(() => {});
-                                }, 500);
-                            }
-                        });
-                    }
+                    retryCount = 0;
+                    tryPlayVideo(elements.remoteVideo, 'Remote video');
                     
-                    if (elements.minimizedRemoteVideo.paused) {
-                        elements.minimizedRemoteVideo.play().then(() => {
-                            console.log('Minimized remote video started playing');
-                        }).catch(err => {
-                            // Ignore AbortError (interrupted by new load)
-                            if (err.name !== 'AbortError') {
-                                console.error('Error playing minimized remote video:', err);
-                                // Retry after a short delay
-                                setTimeout(() => {
-                                    elements.minimizedRemoteVideo.play().catch(() => {});
-                                }, 500);
-                            }
-                        });
-                    }
-                }, 100);
+                    retryCount = 0;
+                    tryPlayVideo(elements.minimizedRemoteVideo, 'Minimized remote video');
+                }, playDelay);
                 
                 // Add event listeners to detect when video starts (only once)
                 if (!elements.remoteVideo.hasAttribute('data-listener-added')) {
@@ -776,21 +784,82 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function getLocalStream(video = true) {
         try {
-            const constraints = {
-                audio: true,
-                video: video ? {
-                    facingMode: state.currentCamera
-                } : false
+            // Mobile-optimized constraints
+            let constraints = {
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    // Mobile-specific audio settings
+                    ...(isMobile && {
+                        sampleRate: 48000,
+                        channelCount: 1
+                    })
+                },
+                video: video ? (isMobile ? {
+                    facingMode: state.currentCamera,
+                    width: { ideal: 640, max: 1280 },
+                    height: { ideal: 480, max: 720 },
+                    frameRate: { ideal: 30, max: 30 },
+                    aspectRatio: { ideal: 16/9 }
+                } : {
+                    facingMode: state.currentCamera,
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }) : false
             };
             
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            console.log('Requesting media with constraints:', constraints);
+            
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (error) {
+                // Fallback for mobile if facingMode fails
+                if (isMobile && video && error.name === 'OverconstrainedError') {
+                    console.warn('FacingMode constraint failed, trying without it...');
+                    constraints.video = {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 30 }
+                    };
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                } else if (isMobile && video && error.name === 'NotReadableError') {
+                    // Try with simpler constraints
+                    console.warn('Camera not readable, trying simpler constraints...');
+                    constraints.video = true; // Let browser choose
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                } else {
+                    throw error;
+                }
+            }
+            
             state.localStream = stream;
             elements.localVideo.srcObject = stream;
             state.isVideoEnabled = video;
+            
+            // Log stream info
+            const videoTracks = stream.getVideoTracks();
+            const audioTracks = stream.getAudioTracks();
+            console.log('Stream obtained:', {
+                videoTracks: videoTracks.length,
+                audioTracks: audioTracks.length,
+                videoSettings: videoTracks[0]?.getSettings(),
+                audioSettings: audioTracks[0]?.getSettings()
+            });
+            
             return stream;
         } catch (error) {
             console.error('Error accessing media devices:', error);
-            alert('Erro ao acessar câmera/microfone. Verifique as permissões.');
+            let errorMessage = 'Erro ao acessar câmera/microfone.';
+            if (error.name === 'NotAllowedError') {
+                errorMessage += ' Por favor, permita o acesso à câmera e microfone nas configurações do navegador.';
+            } else if (error.name === 'NotFoundError') {
+                errorMessage += ' Câmera ou microfone não encontrados.';
+            } else if (error.name === 'NotReadableError') {
+                errorMessage += ' Câmera ou microfone já estão em uso por outro aplicativo.';
+            }
+            alert(errorMessage);
             throw error;
         }
     }
@@ -815,11 +884,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 currentDirection: t.currentDirection
             })));
             
-            const offer = await state.peerConnection.createOffer();
+            // Mobile may need offerToReceiveAudio/Video explicitly set
+            const offerOptions = isMobile ? {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: state.isVideoCall
+            } : {};
+            
+            const offer = await state.peerConnection.createOffer(offerOptions);
             console.log('Offer created:', {
                 type: offer.type,
                 hasSDP: !!offer.sdp,
-                sdpLength: offer.sdp?.length
+                sdpLength: offer.sdp?.length,
+                isMobile: isMobile
             });
             
             await state.peerConnection.setLocalDescription(offer);
@@ -1069,11 +1145,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 currentDirection: t.currentDirection
             })));
             
-            const answer = await state.peerConnection.createAnswer();
+            // Mobile may need offerToReceiveAudio/Video explicitly set
+            const answerOptions = isMobile ? {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: state.isVideoCall
+            } : {};
+            
+            const answer = await state.peerConnection.createAnswer(answerOptions);
             console.log('Answer created, setting local description...', {
                 answerType: answer.type,
                 hasSDP: !!answer.sdp,
-                sdpLength: answer.sdp?.length
+                sdpLength: answer.sdp?.length,
+                isMobile: isMobile
             });
             
             await state.peerConnection.setLocalDescription(answer);
@@ -1217,15 +1300,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 sdpMid: candidate.sdpMid
             });
             
-            await state.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-            console.log('ICE candidate added successfully');
+            // Mobile may need retry for adding candidates
+            let retries = 0;
+            const maxRetries = isMobile ? 3 : 1;
+            
+            while (retries <= maxRetries) {
+                try {
+                    await state.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log('ICE candidate added successfully');
+                    break; // Success, exit retry loop
+                } catch (addError) {
+                    retries++;
+                    if (retries > maxRetries) {
+                        throw addError; // Re-throw if all retries failed
+                    }
+                    // Wait a bit before retry (mobile may need more time)
+                    await new Promise(resolve => setTimeout(resolve, isMobile ? 100 : 50));
+                }
+            }
         } catch (error) {
             // Some candidates may fail (e.g., for different media lines), that's OK
             // Only log as error if it's not a common case
-            if (error.message && error.message.includes('sdpMLineIndex')) {
-                console.warn('Candidate skipped (wrong media line):', {
+            if (error.message && (error.message.includes('sdpMLineIndex') || error.message.includes('InvalidStateError'))) {
+                console.warn('Candidate skipped:', {
                     sdpMLineIndex: candidate.sdpMLineIndex,
-                    error: error.message
+                    error: error.message,
+                    connectionState: state.peerConnection?.connectionState
                 });
             } else {
                 console.error('Error handling candidate:', error, candidate);
@@ -1683,10 +1783,34 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const videoTrack = state.localStream.getVideoTracks()[0];
             if (videoTrack) {
-                const newStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: state.currentCamera },
-                    audio: false
-                });
+                // Mobile-optimized constraints for camera switch
+                let videoConstraints = isMobile ? {
+                    facingMode: state.currentCamera,
+                    width: { ideal: 640, max: 1280 },
+                    height: { ideal: 480, max: 720 },
+                    frameRate: { ideal: 30, max: 30 }
+                } : {
+                    facingMode: state.currentCamera
+                };
+                
+                let newStream;
+                try {
+                    newStream = await navigator.mediaDevices.getUserMedia({
+                        video: videoConstraints,
+                        audio: false
+                    });
+                } catch (error) {
+                    // Fallback: try without specific constraints
+                    if (error.name === 'OverconstrainedError' || error.name === 'NotReadableError') {
+                        console.warn('Camera switch with constraints failed, trying simple...');
+                        newStream = await navigator.mediaDevices.getUserMedia({
+                            video: { facingMode: state.currentCamera },
+                            audio: false
+                        });
+                    } else {
+                        throw error;
+                    }
+                }
                 
                 const newVideoTrack = newStream.getVideoTracks()[0];
                 const sender = state.peerConnection.getSenders().find(s => 
@@ -1695,6 +1819,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (sender) {
                     await sender.replaceTrack(newVideoTrack);
+                    console.log('Camera track replaced successfully');
+                } else {
+                    console.warn('No video sender found');
                 }
                 
                 videoTrack.stop();
@@ -1707,6 +1834,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (error) {
             console.error('Error switching camera:', error);
+            // Revert camera state on error
+            state.currentCamera = state.currentCamera === 'user' ? 'environment' : 'user';
             alert('Erro ao trocar câmera. Verifique se o dispositivo suporta múltiplas câmeras.');
         }
     });
@@ -1787,10 +1916,23 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(e => console.error("Message poll error", e));
     }, 3000);
 
-    // Signal polling
+    // Signal polling - mobile may need more frequent polling
+    const signalPollInterval = isMobile ? 1500 : 2000;
     setInterval(() => {
-        fetch(`${config.signalsUrl}?last_signal_id=${state.lastSignalId}`)
-            .then(res => res.json())
+        fetch(`${config.signalsUrl}?last_signal_id=${state.lastSignalId}`, {
+            method: 'GET',
+            cache: 'no-cache',
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+        })
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error(`HTTP error! status: ${res.status}`);
+                }
+                return res.json();
+            })
             .then(data => {
                 if (data.success && data.signals && data.signals.length > 0) {
                     data.signals.forEach(signal => {
@@ -1899,8 +2041,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                 }
             })
-            .catch(e => console.error("Signal poll error", e));
-    }, 2000);
+            .catch(e => {
+                // Mobile may have more network issues, log but don't spam
+                if (!e.message || !e.message.includes('Failed to fetch')) {
+                    console.error("Signal poll error", e);
+                }
+            });
+    }, signalPollInterval);
 
     // Initial scroll
     scrollToBottom();
