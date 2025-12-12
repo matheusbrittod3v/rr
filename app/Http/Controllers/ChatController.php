@@ -274,13 +274,13 @@ class ChatController extends Controller
             $currentUserType = session('chat_user_role');
         }
 
-        // Fetch signals from OTHER participants
-        // Note: admin is treated as a separate type, so admin receives client/provider signals and vice versa
-        // Simplification: Fetch all signals not from me
-        $signals = ChatSignal::where('chat_room_id', $chatRoom->id)
+        // Fetch signals from OTHER participants in THIS specific chat room only
+        // Critical: Always filter by chat_room_id first to ensure isolation
+        $signals = ChatSignal::where('chat_room_id', $chatRoom->id) // Isolate by room
             ->where('id', '>', $lastSignalId)
-            ->where('sender_type', '!=', $currentUserType)
-            ->where('created_at', '>=', now()->subMinutes(2)) // Only recent signals
+            ->where('sender_type', '!=', $currentUserType) // Only signals from other participants
+            ->where('created_at', '>=', now()->subMinutes(5)) // Only recent signals (increased window)
+            ->orderBy('id', 'asc') // Process in order
             ->get();
 
         return response()->json([
