@@ -244,14 +244,28 @@ class ChatController extends Controller
         // Store signal in database
         // Ensure payload is properly JSON encoded
         $payload = $request->payload;
+        
+        // If payload is an array (from JSON request body), encode it
         if (is_array($payload)) {
-            $payload = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            // For SDP objects, ensure SDP string is preserved correctly
+            if (isset($payload['type']) && isset($payload['sdp']) && is_string($payload['sdp'])) {
+                // Clean the SDP string - remove any control characters except newlines
+                $payload['sdp'] = preg_replace('/[\x00-\x08\x0B-\x1C\x1E-\x1F\x7F]/', '', $payload['sdp']);
+                // Normalize line endings
+                $payload['sdp'] = str_replace(["\r\n", "\r"], "\n", $payload['sdp']);
+            }
+            $payload = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
         } elseif (is_string($payload)) {
-            // If it's already a JSON string, validate it
+            // If it's already a JSON string, validate and clean it
             $decoded = json_decode($payload, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                // Clean SDP if present
+                if (isset($decoded['type']) && isset($decoded['sdp']) && is_string($decoded['sdp'])) {
+                    $decoded['sdp'] = preg_replace('/[\x00-\x08\x0B-\x1C\x1E-\x1F\x7F]/', '', $decoded['sdp']);
+                    $decoded['sdp'] = str_replace(["\r\n", "\r"], "\n", $decoded['sdp']);
+                }
                 // Re-encode to ensure proper formatting
-                $payload = json_encode($decoded, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                $payload = json_encode($decoded, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
             }
             // If it's not valid JSON, use as is (shouldn't happen)
         }

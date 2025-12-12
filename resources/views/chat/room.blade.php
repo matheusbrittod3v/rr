@@ -638,9 +638,22 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Clean SDP before using
-            const cleanedSDP = cleanSDP(pendingOffer.sdp);
+            let cleanedSDP = cleanSDP(pendingOffer.sdp);
             if (!cleanedSDP) {
-                throw new Error('Invalid SDP in pending offer');
+                // Fallback to original if cleaning fails
+                console.warn('SDP cleaning failed, using original');
+                cleanedSDP = String(pendingOffer.sdp).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            }
+            
+            // Validate SDP format before using
+            if (!cleanedSDP.includes('v=') || !cleanedSDP.includes('m=')) {
+                console.error('SDP missing required fields:', {
+                    hasVersion: cleanedSDP.includes('v='),
+                    hasMedia: cleanedSDP.includes('m='),
+                    originalLength: pendingOffer.sdp ? pendingOffer.sdp.length : 0,
+                    cleanedLength: cleanedSDP.length
+                });
+                throw new Error('SDP format invalid: missing required fields');
             }
             
             const cleanOffer = {
@@ -652,8 +665,48 @@ document.addEventListener('DOMContentLoaded', function() {
             await createPeerConnection();
             
             // Create RTCSessionDescription with cleaned SDP
-            const sessionDescription = new RTCSessionDescription(cleanOffer);
-            await state.peerConnection.setRemoteDescription(sessionDescription);
+            // Try to set remote description with error handling
+            try {
+                const sessionDescription = new RTCSessionDescription(cleanOffer);
+                
+                // Log problematic lines for debugging
+                const sdpLines = cleanedSDP.split('\n');
+                const problematicLines = sdpLines.filter(line => 
+                    line.includes('ssrc:') && line.includes('msid:')
+                );
+                if (problematicLines.length > 0) {
+                    console.log('Found ssrc/msid lines:', problematicLines);
+                }
+                
+                await state.peerConnection.setRemoteDescription(sessionDescription);
+            } catch (sdpError) {
+                console.error('SDP Error details:', {
+                    error: sdpError.message,
+                    sdpType: cleanOffer.type,
+                    sdpLength: cleanedSDP.length,
+                    problematicLines: cleanedSDP.split('\n').filter(line => 
+                        line.includes('ssrc:') && line.includes('msid:')
+                    ).slice(0, 3)
+                });
+                
+                // Try with original SDP as last resort
+                if (pendingOffer.sdp !== cleanedSDP) {
+                    console.log('Attempting with original SDP...');
+                    try {
+                        const originalOffer = {
+                            type: pendingOffer.type,
+                            sdp: String(pendingOffer.sdp).replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+                        };
+                        await state.peerConnection.setRemoteDescription(new RTCSessionDescription(originalOffer));
+                        console.log('Success with original SDP');
+                    } catch (originalError) {
+                        console.error('Original SDP also failed:', originalError);
+                        throw sdpError; // Throw the original error
+                    }
+                } else {
+                    throw sdpError;
+                }
+            }
             
             const answer = await state.peerConnection.createAnswer();
             await state.peerConnection.setLocalDescription(answer);
@@ -737,8 +790,74 @@ document.addEventListener('DOMContentLoaded', function() {
         // Normalize line endings
         let cleaned = sdpString.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         
-        // Remove any null bytes or invalid characters
-        cleaned = cleaned.replace(/\0/g, '');
+        // Remove any null bytes or invalid control characters (except \n)
+        // Remove characters with codes 0-31 except \n (10) and \t (9)
+        cleaned = cleaned.replace(/[\x00-\x08\x0B-\x1F\x7F]/g, '');
+        
+        // Remove any non-printable Unicode characters
+        cleaned = cleaned.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+        
+        // Split into lines and process each line
+        const lines = cleaned.split('\n');
+        const processedLines = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i].trim();
+            
+            // Skip empty lines
+            if (!line) {
+                continue;
+            }
+            
+            // Fix lines that might have been broken incorrectly
+            // SDP lines should start with a single letter followed by =
+            // If a line doesn't start with a valid SDP type, it might be a continuation
+            if (line.length > 0 && !/^[a-z]=/i.test(line) && processedLines.length > 0) {
+                // This might be a continuation of the previous line
+                // Check if previous line ends with space or if this looks like continuation
+                const lastLine = processedLines[processedLines.length - 1];
+                if (lastLine && !lastLine.endsWith(' ') && !/^[a-z]=/i.test(line)) {
+                    // Merge with previous line (remove extra spaces)
+                    processedLines[processedLines.length - 1] = lastLine + ' ' + line;
+                    continue;
+                }
+            }
+            
+            // Normalize spaces in attribute lines (a= lines)
+            if (line.startsWith('a=')) {
+                // For a= lines, normalize multiple spaces to single space
+                // Special handling for ssrc lines with msid
+                if (line.includes('ssrc:') && line.includes('msid:')) {
+                    // Format: a=ssrc:ID msid:stream-id track-id
+                    // Ensure proper spacing between ssrc, msid, and track-id
+                    line = line.replace(/\s+/g, ' ').trim();
+                    
+                    // Validate format: should have ssrc:ID msid:stream-id track-id
+                    const ssrcMatch = line.match(/a=ssrc:(\d+)\s+msid:([^\s]+)\s+([^\s]+)/);
+                    if (ssrcMatch) {
+                        // Reconstruct with proper format
+                        line = `a=ssrc:${ssrcMatch[1]} msid:${ssrcMatch[2]} ${ssrcMatch[3]}`;
+                    }
+                } else {
+                    // For other a= lines, just normalize spaces
+                    line = line.replace(/\s+/g, ' ').trim();
+                }
+            }
+            
+            // Ensure proper line format
+            // SDP lines should be: type=value or type=value with attributes
+            if (line.length > 0) {
+                processedLines.push(line);
+            }
+        }
+        
+        // Join lines back
+        cleaned = processedLines.join('\n');
+        
+        // Ensure it ends with newline (SDP standard)
+        if (!cleaned.endsWith('\n')) {
+            cleaned += '\n';
+        }
         
         // Ensure it starts with v=0 (SDP version)
         if (!cleaned.trim().startsWith('v=')) {
