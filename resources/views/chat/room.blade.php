@@ -853,9 +853,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Check if SDP has no line breaks (all in one line)
         // SDP lines should start with a single letter followed by =
-        const lineCount = cleaned.split('\n').length;
-        const needsReconstruction = lineCount < 3 || (lineCount === 1 && cleaned.length > 100) || 
-                                   !cleaned.includes('\n') || cleaned.match(/^[a-z]=[^a-z]*[a-z]=/);
+        const lineCount = cleaned.split('\n').filter(l => l.trim()).length;
+        const hasNewlines = cleaned.includes('\n');
+        const isSingleLine = !hasNewlines || (lineCount === 1 && cleaned.length > 100);
+        const needsReconstruction = isSingleLine || (lineCount < 3 && cleaned.length > 100);
         
         if (needsReconstruction) {
             // Reconstruct SDP by splitting on SDP line patterns
@@ -875,8 +876,24 @@ document.addEventListener('DOMContentLoaded', function() {
             // Simple and effective: find [letter]=[anything][letter]= and insert \n
             // The regex matches: ([a-z])=([value])([a-z])=
             // Where value is anything that doesn't contain newline and [letter]=
+            // But be careful not to break c= lines (connection data)
             cleaned = cleaned.replace(/([a-z])=([^\n]*?)([a-z])=/gi, (match, p1, p2, p3) => {
                 // p1 = first letter, p2 = value, p3 = next letter
+                
+                // Special case: if p1 is 'c' and p2 is very short (like "1"), 
+                // it might be a broken c= line, don't split
+                if (p1.toLowerCase() === 'c' && p2.length < 5 && /^\d+$/.test(p2)) {
+                    // This looks like a broken c= line, don't split here
+                    return match;
+                }
+                
+                // Don't split if p2 contains IP address pattern and p1 is 'c'
+                // (c= lines should have full connection data)
+                if (p1.toLowerCase() === 'c' && /\d+\.\d+\.\d+\.\d+/.test(p2)) {
+                    // This is a complete c= line, don't split
+                    return match;
+                }
+                
                 // Only insert newline if value is reasonable (not empty, not too long)
                 if (p2.length > 0 && p2.length < 1000) {
                     return `${p1}=${p2}\n${p3}=`;
@@ -922,12 +939,59 @@ document.addEventListener('DOMContentLoaded', function() {
             // If a line doesn't start with a valid SDP type, it might be a continuation
             if (line.length > 0 && !/^[a-z]=/i.test(line) && processedLines.length > 0) {
                 // This might be a continuation of the previous line
-                // Check if previous line ends with space or if this looks like continuation
                 const lastLine = processedLines[processedLines.length - 1];
+                
+                // Special case: if last line is a broken c= line (e.g., "c=1"), merge
+                if (lastLine && lastLine.startsWith('c=')) {
+                    const cValue = lastLine.substring(2).trim();
+                    // If c= line is incomplete (just a number or very short), merge
+                    if (/^\d+$/.test(cValue) || (cValue.length < 10 && !cValue.includes('IN'))) {
+                        processedLines[processedLines.length - 1] = lastLine + ' ' + line;
+                        continue;
+                    }
+                }
+                
+                // Check if previous line ends with space or if this looks like continuation
                 if (lastLine && !lastLine.endsWith(' ') && !/^[a-z]=/i.test(line)) {
                     // Merge with previous line (remove extra spaces)
                     processedLines[processedLines.length - 1] = lastLine + ' ' + line;
                     continue;
+                }
+            }
+            
+            // Validate and fix connection lines (c= lines)
+            // Format should be: c=IN IP4 <address> or c=IN IP6 <address>
+            if (line.startsWith('c=')) {
+                // Remove non-printable characters
+                line = line.replace(/[^\x20-\x7E]/g, '');
+                line = line.trim();
+                
+                // Check if line is malformed (e.g., "c=1" instead of "c=IN IP4 0.0.0.0")
+                const cMatch = line.match(/^c=(.+)$/);
+                if (cMatch) {
+                    const cValue = cMatch[1].trim();
+                    // If it's just a number or very short, it's likely malformed
+                    if (/^\d+$/.test(cValue) || cValue.length < 5) {
+                        console.warn('Malformed c= line detected, fixing:', line);
+                        // Try to find a valid c= line nearby or use default
+                        // Look for IP address pattern in the line or use default
+                        const ipMatch = line.match(/(\d+\.\d+\.\d+\.\d+)/);
+                        if (ipMatch) {
+                            line = `c=IN IP4 ${ipMatch[1]}`;
+                        } else {
+                            // Use default connection data
+                            line = 'c=IN IP4 0.0.0.0';
+                        }
+                    } else if (!cValue.includes('IN') && !cValue.includes('IP')) {
+                        // Missing network type, try to fix
+                        const ipMatch = cValue.match(/(\d+\.\d+\.\d+\.\d+)/);
+                        if (ipMatch) {
+                            line = `c=IN IP4 ${ipMatch[1]}`;
+                        } else {
+                            // Default fallback
+                            line = 'c=IN IP4 0.0.0.0';
+                        }
+                    }
                 }
             }
             
