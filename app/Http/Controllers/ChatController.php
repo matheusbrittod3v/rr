@@ -254,6 +254,7 @@ class ChatController extends Controller
                 // Normalize line endings
                 $payload['sdp'] = str_replace(["\r\n", "\r"], "\n", $payload['sdp']);
             }
+            // Encode with flags to preserve newlines and special characters
             $payload = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
         } elseif (is_string($payload)) {
             // If it's already a JSON string, validate and clean it
