@@ -354,7 +354,9 @@ document.addEventListener('DOMContentLoaded', function() {
         currentCamera: 'user', // 'user' (front) or 'environment' (back)
         selectedFile: null,
         callStartTime: null,
-        callTimerInterval: null
+        callTimerInterval: null,
+        processedSignalIds: new Set(), // Track processed signals to avoid duplicates
+        isAcceptingCall: false // Prevent multiple accept attempts
     };
     
     // WebRTC Config
@@ -553,6 +555,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function startCall(isVideo = true) {
         try {
+            // Don't start if already in call
+            if (state.inCall || state.isAcceptingCall) {
+                console.log('Cannot start call: already in call');
+                return;
+            }
+            
             state.isVideoCall = isVideo;
             await getLocalStream(isVideo);
             await createPeerConnection();
@@ -566,18 +574,31 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Error starting call:', error);
             endCall(false);
+            alert('Erro ao iniciar chamada. Verifique as permissões de câmera/microfone.');
         }
     }
 
     let pendingOffer = null;
+    let pendingOfferSignalId = null;
 
-    async function handleIncomingOffer(offer) {
+    async function handleIncomingOffer(offer, signalId) {
         try {
-            if (state.inCall) return;
+            // Ignore if already in call or already accepting
+            if (state.inCall || state.isAcceptingCall) {
+                console.log('Ignoring offer: already in call or accepting');
+                return;
+            }
+            
+            // Ignore if we already have a pending offer
+            if (pendingOffer) {
+                console.log('Ignoring offer: already have pending offer');
+                return;
+            }
             
             const isVideo = offer.sdp && offer.sdp.includes('video');
             state.isVideoCall = isVideo;
             pendingOffer = offer;
+            pendingOfferSignalId = signalId;
             
             showIncomingCallModal();
         } catch (error) {
@@ -587,10 +608,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function acceptIncomingCall() {
         try {
-            if (!pendingOffer) return;
+            // Prevent multiple accept attempts
+            if (state.isAcceptingCall || !pendingOffer) {
+                console.log('Cannot accept: already accepting or no pending offer');
+                return;
+            }
+            
+            state.isAcceptingCall = true;
+            
+            // Close modal immediately
+            elements.incomingCallModal.classList.add('hidden');
             
             const isVideo = pendingOffer.sdp && pendingOffer.sdp.includes('video');
             state.isVideoCall = isVideo;
+            
+            // Mark this signal as processed
+            if (pendingOfferSignalId) {
+                state.processedSignalIds.add(pendingOfferSignalId);
+            }
             
             await getLocalStream(isVideo);
             await createPeerConnection();
@@ -602,11 +637,18 @@ document.addEventListener('DOMContentLoaded', function() {
             sendSignal('answer', answer);
             showCallOverlay();
             updateCallStatus('Conectando...');
-            startCallTimer();
+            
+            // Clear pending offer
             pendingOffer = null;
+            pendingOfferSignalId = null;
+            state.isAcceptingCall = false;
         } catch (error) {
             console.error('Error accepting call:', error);
+            state.isAcceptingCall = false;
+            pendingOffer = null;
+            pendingOfferSignalId = null;
             endCall(false);
+            alert('Erro ao aceitar chamada. Tente novamente.');
         }
     }
 
@@ -709,7 +751,10 @@ document.addEventListener('DOMContentLoaded', function() {
             state.peerConnection = null;
         }
         
+        // Clear pending call state
         pendingOffer = null;
+        pendingOfferSignalId = null;
+        state.isAcceptingCall = false;
         state.inCall = false;
         state.isCallMinimized = false;
         state.isVideoCall = false;
@@ -851,8 +896,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     elements.rejectCallBtn.addEventListener('click', () => {
         sendSignal('reject', {});
+        // Mark pending offer signal as processed
+        if (pendingOfferSignalId) {
+            state.processedSignalIds.add(pendingOfferSignalId);
+        }
         pendingOffer = null;
-        endCall(false);
+        pendingOfferSignalId = null;
+        state.isAcceptingCall = false;
+        elements.incomingCallModal.classList.add('hidden');
     });
 
     // ========== CALL BUTTONS ==========
@@ -885,36 +936,68 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.success && data.signals && data.signals.length > 0) {
                     data.signals.forEach(signal => {
-                        state.lastSignalId = signal.id;
-                        
-                        const payload = JSON.parse(signal.payload);
-                        
-                        if (state.inCall && (signal.type === 'offer' || signal.type === 'answer')) {
-                            console.warn('Ignored conflicting signal during active call:', signal.type);
+                        // Skip if already processed
+                        if (state.processedSignalIds.has(signal.id)) {
+                            state.lastSignalId = Math.max(state.lastSignalId, signal.id);
                             return;
                         }
                         
-                        if (!elements.incomingCallModal.classList.contains('hidden') && signal.type === 'offer') {
-                            return;
+                        state.lastSignalId = Math.max(state.lastSignalId, signal.id);
+                        
+                        // Mark as processed immediately to avoid duplicates
+                        state.processedSignalIds.add(signal.id);
+                        
+                        // Clean old processed IDs (keep only last 100)
+                        if (state.processedSignalIds.size > 100) {
+                            const idsArray = Array.from(state.processedSignalIds);
+                            const toRemove = idsArray.slice(0, idsArray.length - 100);
+                            toRemove.forEach(id => state.processedSignalIds.delete(id));
                         }
+                        
+                        try {
+                            const payload = JSON.parse(signal.payload);
+                            
+                            // Ignore conflicting signals during active call
+                            if (state.inCall && (signal.type === 'offer' || signal.type === 'answer')) {
+                                console.warn('Ignored conflicting signal during active call:', signal.type, signal.id);
+                                return;
+                            }
+                            
+                            // Ignore new offers if we're already accepting one
+                            if (state.isAcceptingCall && signal.type === 'offer') {
+                                console.warn('Ignored offer: already accepting call');
+                                return;
+                            }
+                            
+                            // Ignore new offers if modal is already open
+                            if (!elements.incomingCallModal.classList.contains('hidden') && signal.type === 'offer') {
+                                console.warn('Ignored offer: modal already open');
+                                return;
+                            }
 
-                        switch(signal.type) {
-                            case 'offer':
-                                handleIncomingOffer(payload);
-                                break;
-                            case 'answer':
-                                handleIncomingAnswer(payload);
-                                break;
-                            case 'candidate':
-                                handleIncomingCandidate(payload);
-                                break;
-                            case 'hangup':
-                            case 'reject':
-                                endCall(false);
-                                if (signal.type === 'reject') {
-                                    alert('Chamada recusada.');
-                                }
-                                break;
+                            switch(signal.type) {
+                                case 'offer':
+                                    handleIncomingOffer(payload, signal.id);
+                                    break;
+                                case 'answer':
+                                    handleIncomingAnswer(payload);
+                                    break;
+                                case 'candidate':
+                                    // Only process candidates if we have a peer connection
+                                    if (state.peerConnection) {
+                                        handleIncomingCandidate(payload);
+                                    }
+                                    break;
+                                case 'hangup':
+                                case 'reject':
+                                    endCall(false);
+                                    if (signal.type === 'reject') {
+                                        alert('Chamada recusada.');
+                                    }
+                                    break;
+                            }
+                        } catch (parseError) {
+                            console.error('Error parsing signal payload:', parseError, signal);
                         }
                     });
                 }
