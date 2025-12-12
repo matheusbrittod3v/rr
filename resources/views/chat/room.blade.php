@@ -595,6 +595,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
+            // Log SDP structure for debugging
+            if (offer && offer.sdp) {
+                const hasNewlines = offer.sdp.includes('\n');
+                const lineCount = offer.sdp.split('\n').length;
+                console.log('Received offer SDP:', {
+                    hasNewlines,
+                    lineCount,
+                    length: offer.sdp.length,
+                    firstChars: offer.sdp.substring(0, 100)
+                });
+            }
+            
             const isVideo = offer.sdp && offer.sdp.includes('video');
             state.isVideoCall = isVideo;
             pendingOffer = offer;
@@ -839,12 +851,59 @@ document.addEventListener('DOMContentLoaded', function() {
         // Normalize line endings
         let cleaned = sdpString.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         
+        // Check if SDP has no line breaks (all in one line)
+        // SDP lines should start with a single letter followed by =
+        const lineCount = cleaned.split('\n').length;
+        const needsReconstruction = lineCount < 3 || (lineCount === 1 && cleaned.length > 100) || 
+                                   !cleaned.includes('\n') || cleaned.match(/^[a-z]=[^a-z]*[a-z]=/);
+        
+        if (needsReconstruction) {
+            // Reconstruct SDP by splitting on SDP line patterns
+            // SDP lines start with: v=, o=, s=, t=, a=, m=, c=, b=, etc.
+            console.warn('SDP appears to be on single line or malformed, attempting to reconstruct...', {
+                lineCount,
+                length: cleaned.length,
+                firstChars: cleaned.substring(0, 100),
+                hasNewlines: cleaned.includes('\n')
+            });
+            
+            // Reconstruct SDP by detecting line boundaries
+            // SDP lines follow pattern: [single letter]=[value]
+            // When concatenated: "v=0o=-" should become "v=0\no=-"
+            // Pattern: [letter]=[value][letter]= where value doesn't contain newline
+            
+            // Simple and effective: find [letter]=[anything][letter]= and insert \n
+            // The regex matches: ([a-z])=([value])([a-z])=
+            // Where value is anything that doesn't contain newline and [letter]=
+            cleaned = cleaned.replace(/([a-z])=([^\n]*?)([a-z])=/gi, (match, p1, p2, p3) => {
+                // p1 = first letter, p2 = value, p3 = next letter
+                // Only insert newline if value is reasonable (not empty, not too long)
+                if (p2.length > 0 && p2.length < 1000) {
+                    return `${p1}=${p2}\n${p3}=`;
+                }
+                return match;
+            });
+            
+            // Remove leading newlines
+            cleaned = cleaned.replace(/^\n+/, '');
+            // Normalize multiple newlines to single
+            cleaned = cleaned.replace(/\n\n+/g, '\n');
+            
+            // Verify reconstruction worked
+            const newLineCount = cleaned.split('\n').length;
+            console.log('SDP reconstruction result:', {
+                originalLines: lineCount,
+                newLines: newLineCount,
+                firstFewLines: cleaned.split('\n').slice(0, 5)
+            });
+        }
+        
         // Remove any null bytes or invalid control characters (except \n)
         // Remove characters with codes 0-31 except \n (10) and \t (9)
         cleaned = cleaned.replace(/[\x00-\x08\x0B-\x1F\x7F]/g, '');
         
-        // Remove any non-printable Unicode characters
-        cleaned = cleaned.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+        // Remove any non-printable Unicode characters (but keep \n)
+        cleaned = cleaned.replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g, '');
         
         // Split into lines and process each line
         const lines = cleaned.split('\n');
@@ -947,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Join lines back
+        // Join lines back with proper line breaks
         cleaned = processedLines.join('\n');
         
         // Ensure it ends with newline (SDP standard)
@@ -955,9 +1014,40 @@ document.addEventListener('DOMContentLoaded', function() {
             cleaned += '\n';
         }
         
-        // Ensure it starts with v=0 (SDP version)
-        if (!cleaned.trim().startsWith('v=')) {
-            console.warn('SDP does not start with version line');
+        // Validate SDP structure
+        const finalLines = cleaned.split('\n').filter(l => l.trim());
+        if (finalLines.length < 3) {
+            console.error('SDP has too few lines after processing:', finalLines.length);
+            return null;
+        }
+        
+        // Ensure it starts with v= (SDP version)
+        if (!finalLines[0].trim().startsWith('v=')) {
+            console.error('SDP does not start with version line. First line:', finalLines[0]);
+            // Try to find and move v= line to the beginning
+            const vLineIndex = finalLines.findIndex(l => l.trim().startsWith('v='));
+            if (vLineIndex > 0) {
+                const vLine = finalLines.splice(vLineIndex, 1)[0];
+                finalLines.unshift(vLine);
+                cleaned = finalLines.join('\n') + '\n';
+                console.warn('Moved v= line to beginning');
+            } else {
+                console.error('No v= line found in SDP');
+                return null;
+            }
+        }
+        
+        // Validate that we have required SDP lines
+        const hasOrigin = finalLines.some(l => l.trim().startsWith('o='));
+        const hasSession = finalLines.some(l => l.trim().startsWith('s='));
+        const hasTiming = finalLines.some(l => l.trim().startsWith('t='));
+        
+        if (!hasOrigin || !hasTiming) {
+            console.warn('SDP missing required lines:', {
+                hasOrigin,
+                hasSession,
+                hasTiming
+            });
         }
         
         return cleaned;
