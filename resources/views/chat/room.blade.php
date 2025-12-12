@@ -614,6 +614,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
+            // Validate pending offer
+            if (!pendingOffer.type || !pendingOffer.sdp) {
+                console.error('Invalid pending offer:', pendingOffer);
+                pendingOffer = null;
+                pendingOfferSignalId = null;
+                elements.incomingCallModal.classList.add('hidden');
+                alert('Erro: oferta de chamada inválida.');
+                return;
+            }
+            
             state.isAcceptingCall = true;
             
             // Close modal immediately
@@ -627,10 +637,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 state.processedSignalIds.add(pendingOfferSignalId);
             }
             
+            // Clean SDP before using
+            const cleanedSDP = cleanSDP(pendingOffer.sdp);
+            if (!cleanedSDP) {
+                throw new Error('Invalid SDP in pending offer');
+            }
+            
+            const cleanOffer = {
+                type: pendingOffer.type,
+                sdp: cleanedSDP
+            };
+            
             await getLocalStream(isVideo);
             await createPeerConnection();
             
-            await state.peerConnection.setRemoteDescription(new RTCSessionDescription(pendingOffer));
+            // Create RTCSessionDescription with cleaned SDP
+            const sessionDescription = new RTCSessionDescription(cleanOffer);
+            await state.peerConnection.setRemoteDescription(sessionDescription);
+            
             const answer = await state.peerConnection.createAnswer();
             await state.peerConnection.setLocalDescription(answer);
             
@@ -648,14 +672,38 @@ document.addEventListener('DOMContentLoaded', function() {
             pendingOffer = null;
             pendingOfferSignalId = null;
             endCall(false);
-            alert('Erro ao aceitar chamada. Tente novamente.');
+            
+            let errorMessage = 'Erro ao aceitar chamada.';
+            if (error.message && error.message.includes('SDP')) {
+                errorMessage += ' Problema com a descrição da sessão. Tente iniciar uma nova chamada.';
+            }
+            alert(errorMessage);
         }
     }
 
     async function handleIncomingAnswer(answer) {
         try {
             if (!state.peerConnection) return;
-            await state.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            
+            // Validate and clean answer
+            if (!answer || !answer.type || !answer.sdp) {
+                console.error('Invalid answer payload:', answer);
+                return;
+            }
+            
+            // Clean SDP before using
+            const cleanedSDP = cleanSDP(answer.sdp);
+            if (!cleanedSDP) {
+                throw new Error('Invalid SDP in answer');
+            }
+            
+            const cleanAnswer = {
+                type: answer.type,
+                sdp: cleanedSDP
+            };
+            
+            const sessionDescription = new RTCSessionDescription(cleanAnswer);
+            await state.peerConnection.setRemoteDescription(sessionDescription);
             updateCallStatus('Conectado');
             startCallTimer();
             setTimeout(() => {
@@ -663,6 +711,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 2000);
         } catch (error) {
             console.error('Error handling answer:', error);
+            if (error.message && error.message.includes('SDP')) {
+                console.error('SDP parsing error in answer:', error);
+                endCall(false);
+                alert('Erro na conexão. A chamada será encerrada.');
+            }
         }
     }
 
@@ -675,14 +728,53 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Helper function to clean and validate SDP
+    function cleanSDP(sdpString) {
+        if (!sdpString || typeof sdpString !== 'string') {
+            return null;
+        }
+        
+        // Normalize line endings
+        let cleaned = sdpString.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        
+        // Remove any null bytes or invalid characters
+        cleaned = cleaned.replace(/\0/g, '');
+        
+        // Ensure it starts with v=0 (SDP version)
+        if (!cleaned.trim().startsWith('v=')) {
+            console.warn('SDP does not start with version line');
+        }
+        
+        return cleaned;
+    }
+
     function sendSignal(type, payload) {
+        // Ensure we only send type and sdp for SDP objects
+        let cleanPayload = payload;
+        if (payload && typeof payload === 'object' && 'type' in payload && 'sdp' in payload) {
+            // It's an RTCSessionDescription, extract only type and sdp
+            const cleanedSDP = cleanSDP(payload.sdp);
+            if (!cleanedSDP) {
+                console.error('Invalid SDP in payload:', payload);
+                return;
+            }
+            
+            cleanPayload = {
+                type: payload.type,
+                sdp: cleanedSDP
+            };
+        } else if (payload && typeof payload === 'object' && 'candidate' in payload) {
+            // It's an RTCIceCandidate, send as is
+            cleanPayload = payload;
+        }
+        
         fetch(config.sendSignalUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': config.csrfToken
             },
-            body: JSON.stringify({ type, payload })
+            body: JSON.stringify({ type, payload: cleanPayload })
         }).catch(err => console.error('Error sending signal:', err));
     }
 
@@ -955,7 +1047,39 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         
                         try {
-                            const payload = JSON.parse(signal.payload);
+                            let payload = JSON.parse(signal.payload);
+                            
+                            // Clean and validate SDP payloads
+                            if ((signal.type === 'offer' || signal.type === 'answer') && payload) {
+                                // Ensure we have a valid SDP object
+                                if (typeof payload === 'object' && payload.type && payload.sdp) {
+                                    // Clean SDP string
+                                    const cleanedSDP = cleanSDP(payload.sdp);
+                                    if (!cleanedSDP) {
+                                        console.error('Invalid SDP: could not clean sdp field', signal.id);
+                                        return;
+                                    }
+                                    
+                                    payload = {
+                                        type: payload.type,
+                                        sdp: cleanedSDP
+                                    };
+                                    
+                                    // Validate SDP format
+                                    if (!payload.sdp || payload.sdp.length === 0) {
+                                        console.error('Invalid SDP: empty sdp field', signal.id);
+                                        return;
+                                    }
+                                    
+                                    if (!['offer', 'answer'].includes(payload.type)) {
+                                        console.error('Invalid SDP type:', payload.type, signal.id);
+                                        return;
+                                    }
+                                } else {
+                                    console.error('Invalid SDP payload structure:', payload, signal.id);
+                                    return;
+                                }
+                            }
                             
                             // Ignore conflicting signals during active call
                             if (state.inCall && (signal.type === 'offer' || signal.type === 'answer')) {
