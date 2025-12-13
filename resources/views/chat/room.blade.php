@@ -300,8 +300,20 @@
     }
 </style>
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
+<!-- Importar módulos JavaScript -->
+<script src="{{ asset('js/chat/Config.js') }}"></script>
+<script src="{{ asset('js/chat/Utils.js') }}"></script>
+<script src="{{ asset('js/chat/StateManager.js') }}"></script>
+<script src="{{ asset('js/chat/UIManager.js') }}"></script>
+<script src="{{ asset('js/chat/ChatManager.js') }}"></script>
+<script src="{{ asset('js/chat/MediaManager.js') }}"></script>
+<script src="{{ asset('js/chat/WebRTCManager.js') }}"></script>
+<script src="{{ asset('js/chat/CallManager.js') }}"></script>
+<script src="{{ asset('js/chat/SignalManager.js') }}"></script>
+<script src="{{ asset('js/chat/Main.js') }}"></script>
+<!-- TODO: Todo o código JavaScript foi migrado para módulos separados -->
+<!-- O código abaixo será removido após verificação -->
+<!--
     // UI Elements
     const elements = {
         chatForm: document.getElementById('chat-form'),
@@ -2873,5 +2885,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial scroll
     scrollToBottom();
 });
+-->
+<!-- Código JavaScript antigo comentado - agora está nos módulos JS -->
 </script>
 @endsection
