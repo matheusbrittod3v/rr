@@ -517,19 +517,41 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Add local stream tracks
         if (state.localStream) {
-            // For voice calls, only add audio tracks (not video)
-            // For video calls, add both audio and video tracks
-            const tracksToAdd = state.isVideoCall 
-                ? state.localStream.getTracks()
-                : state.localStream.getAudioTracks();
+            // Get available tracks
+            const availableAudioTracks = state.localStream.getAudioTracks();
+            const availableVideoTracks = state.localStream.getVideoTracks();
+            
+            // Determine which tracks to add based on call type and availability
+            let tracksToAdd = [];
+            
+            if (state.isVideoCall) {
+                // Video call: add whatever we have (audio, video, or both)
+                tracksToAdd = [...availableAudioTracks, ...availableVideoTracks];
+                console.log('Video call - adding all available tracks');
+            } else {
+                // Voice call: prefer audio, but if no audio, use video (better than nothing)
+                if (availableAudioTracks.length > 0) {
+                    tracksToAdd = availableAudioTracks;
+                    console.log('Voice call - adding audio tracks only');
+                } else if (availableVideoTracks.length > 0) {
+                    // No audio available, but we have video - use it (user might have only camera)
+                    tracksToAdd = availableVideoTracks;
+                    console.log('Voice call - no audio available, using video tracks instead');
+                }
+            }
             
             console.log('Adding local tracks to peer connection:', {
                 totalTracks: state.localStream.getTracks().length,
-                videoTracks: state.localStream.getVideoTracks().length,
-                audioTracks: state.localStream.getAudioTracks().length,
+                videoTracks: availableVideoTracks.length,
+                audioTracks: availableAudioTracks.length,
                 tracksToAdd: tracksToAdd.length,
-                isVideoCall: state.isVideoCall
+                isVideoCall: state.isVideoCall,
+                tracksToAddTypes: tracksToAdd.map(t => t.kind)
             });
+            
+            if (tracksToAdd.length === 0) {
+                console.warn('No tracks available to add to peer connection!');
+            }
             
             tracksToAdd.forEach(track => {
                 console.log(`Adding local ${track.kind} track:`, {
@@ -544,10 +566,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             });
             
-            // If it's a voice call but we have video tracks in stream, stop them
-            if (!state.isVideoCall && state.localStream.getVideoTracks().length > 0) {
-                console.log('Voice call detected - stopping video tracks from local stream');
-                state.localStream.getVideoTracks().forEach(track => {
+            // If it's a voice call but we have video tracks in stream (and we're not using them), stop them
+            if (!state.isVideoCall && availableVideoTracks.length > 0 && availableAudioTracks.length > 0) {
+                console.log('Voice call detected - stopping unused video tracks from local stream');
+                availableVideoTracks.forEach(track => {
                     track.stop();
                     console.log('Stopped video track for voice call');
                 });
@@ -943,60 +965,202 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function getLocalStream(video = true) {
+        // Try to get available devices first
+        let availableDevices = { audio: false, video: false };
+        
         try {
-            // Mobile-optimized constraints
-            let constraints = {
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    // Mobile-specific audio settings
-                    ...(isMobile && {
-                        sampleRate: 48000,
-                        channelCount: 1
-                    })
-                },
-                video: video ? (isMobile ? {
-                    facingMode: state.currentCamera,
-                    width: { ideal: 640, max: 1280 },
-                    height: { ideal: 480, max: 720 },
-                    frameRate: { ideal: 30, max: 30 },
-                    aspectRatio: { ideal: 16/9 }
-                } : {
-                    facingMode: state.currentCamera,
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                }) : false
-            };
-            
-            console.log('Requesting media with constraints:', constraints);
-            
-            let stream;
-            try {
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
-            } catch (error) {
-                // Fallback for mobile if facingMode fails
-                if (isMobile && video && error.name === 'OverconstrainedError') {
-                    console.warn('FacingMode constraint failed, trying without it...');
-                    constraints.video = {
-                        width: { ideal: 640 },
-                        height: { ideal: 480 },
-                        frameRate: { ideal: 30 }
-                    };
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            availableDevices.audio = devices.some(d => d.kind === 'audioinput');
+            availableDevices.video = devices.some(d => d.kind === 'videoinput');
+            console.log('Available devices:', availableDevices);
+        } catch (err) {
+            console.warn('Could not enumerate devices, will try anyway:', err);
+            // Assume both are available if we can't check
+            availableDevices.audio = true;
+            availableDevices.video = video;
+        }
+        
+        // Build constraints based on what we want and what's available
+        const audioConstraints = availableDevices.audio ? {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            // Mobile-specific audio settings
+            ...(isMobile && {
+                sampleRate: 48000,
+                channelCount: 1
+            })
+        } : false;
+        
+        const videoConstraints = (video && availableDevices.video) ? (isMobile ? {
+            facingMode: state.currentCamera,
+            width: { ideal: 640, max: 1280 },
+            height: { ideal: 480, max: 720 },
+            frameRate: { ideal: 30, max: 30 },
+            aspectRatio: { ideal: 16/9 }
+        } : {
+            facingMode: state.currentCamera,
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+        }) : false;
+        
+        let constraints = {
+            audio: audioConstraints,
+            video: videoConstraints
+        };
+        
+        console.log('Requesting media with constraints:', constraints);
+        
+        let stream = null;
+        let audioError = null;
+        let videoError = null;
+        
+        // Strategy: Try to get both, if that fails, try each separately
+        try {
+            // First try: get both if requested
+            if (audioConstraints && videoConstraints) {
+                try {
                     stream = await navigator.mediaDevices.getUserMedia(constraints);
-                } else if (isMobile && video && error.name === 'NotReadableError') {
-                    // Try with simpler constraints
-                    console.warn('Camera not readable, trying simpler constraints...');
-                    constraints.video = true; // Let browser choose
-                    stream = await navigator.mediaDevices.getUserMedia(constraints);
-                } else {
-                    throw error;
+                    console.log('Successfully obtained both audio and video');
+                } catch (error) {
+                    console.warn('Failed to get both, will try separately:', error);
+                    // Will try separately below
+                    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                        // Permission denied - try separately to see which one
+                        audioError = error;
+                        videoError = error;
+                    } else if (error.name === 'NotFoundError') {
+                        // Device not found - check which one
+                        if (error.message && error.message.includes('video')) {
+                            videoError = error;
+                        } else if (error.message && error.message.includes('audio')) {
+                            audioError = error;
+                        } else {
+                            audioError = error;
+                            videoError = error;
+                        }
+                    } else {
+                        audioError = error;
+                        videoError = error;
+                    }
                 }
+            }
+            
+            // If we don't have a stream yet, try to get what we can
+            if (!stream) {
+                // Try audio only if we need it and don't have it
+                if (audioConstraints && !stream?.getAudioTracks().length) {
+                    try {
+                        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
+                        if (!stream) {
+                            stream = audioStream;
+                            console.log('Obtained audio only');
+                        } else {
+                            // Add audio tracks to existing stream
+                            audioStream.getAudioTracks().forEach(track => {
+                                stream.addTrack(track);
+                            });
+                            // Stop the temporary stream's tracks (they're now in our stream)
+                            audioStream.getTracks().forEach(track => {
+                                if (!stream.getTracks().includes(track)) {
+                                    track.stop();
+                                }
+                            });
+                            console.log('Added audio tracks to existing stream');
+                        }
+                    } catch (error) {
+                        console.warn('Failed to get audio:', error);
+                        audioError = error;
+                    }
+                }
+                
+                // Try video only if we need it and don't have it
+                if (videoConstraints && !stream?.getVideoTracks().length) {
+                    try {
+                        // Try with simpler video constraints first
+                        let videoConstraintsSimple = videoConstraints;
+                        if (isMobile) {
+                            // Try simpler constraints for mobile
+                            try {
+                                const videoStream = await navigator.mediaDevices.getUserMedia({ 
+                                    audio: false, 
+                                    video: videoConstraints 
+                                });
+                                if (!stream) {
+                                    stream = videoStream;
+                                    console.log('Obtained video only');
+                                } else {
+                                    // Add video tracks to existing stream
+                                    videoStream.getVideoTracks().forEach(track => {
+                                        stream.addTrack(track);
+                                    });
+                                    // Stop the temporary stream's tracks
+                                    videoStream.getTracks().forEach(track => {
+                                        if (!stream.getTracks().includes(track)) {
+                                            track.stop();
+                                        }
+                                    });
+                                    console.log('Added video tracks to existing stream');
+                                }
+                            } catch (error) {
+                                // Try even simpler
+                                console.warn('Video with constraints failed, trying simpler:', error);
+                                const videoStream = await navigator.mediaDevices.getUserMedia({ 
+                                    audio: false, 
+                                    video: true 
+                                });
+                                if (!stream) {
+                                    stream = videoStream;
+                                    console.log('Obtained video only (simple)');
+                                } else {
+                                    videoStream.getVideoTracks().forEach(track => {
+                                        stream.addTrack(track);
+                                    });
+                                    videoStream.getTracks().forEach(track => {
+                                        if (!stream.getTracks().includes(track)) {
+                                            track.stop();
+                                        }
+                                    });
+                                    console.log('Added video tracks to existing stream (simple)');
+                                }
+                            }
+                        } else {
+                            const videoStream = await navigator.mediaDevices.getUserMedia({ 
+                                audio: false, 
+                                video: videoConstraints 
+                            });
+                            if (!stream) {
+                                stream = videoStream;
+                                console.log('Obtained video only');
+                            } else {
+                                videoStream.getVideoTracks().forEach(track => {
+                                    stream.addTrack(track);
+                                });
+                                videoStream.getTracks().forEach(track => {
+                                    if (!stream.getTracks().includes(track)) {
+                                        track.stop();
+                                    }
+                                });
+                                console.log('Added video tracks to existing stream');
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('Failed to get video:', error);
+                        videoError = error;
+                    }
+                }
+            }
+            
+            // If we still don't have a stream, we failed completely
+            if (!stream || (stream.getAudioTracks().length === 0 && stream.getVideoTracks().length === 0)) {
+                throw new Error('Não foi possível obter nenhum dispositivo de mídia (câmera ou microfone)');
             }
             
             state.localStream = stream;
             elements.localVideo.srcObject = stream;
-            state.isVideoEnabled = video;
+            
+            // Update state based on what we actually got
+            state.isVideoEnabled = stream.getVideoTracks().length > 0;
             
             // Log stream info
             const videoTracks = stream.getVideoTracks();
@@ -1004,36 +1168,82 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Stream obtained:', {
                 videoTracks: videoTracks.length,
                 audioTracks: audioTracks.length,
+                hasVideo: videoTracks.length > 0,
+                hasAudio: audioTracks.length > 0,
                 videoSettings: videoTracks[0]?.getSettings(),
                 audioSettings: audioTracks[0]?.getSettings()
             });
             
+            // Show warning if we couldn't get what was requested
+            if (video && videoTracks.length === 0) {
+                console.warn('Video was requested but not available - continuing with audio only');
+            }
+            if (audioTracks.length === 0) {
+                console.warn('Audio was requested but not available - continuing with video only');
+            }
+            
             return stream;
         } catch (error) {
             console.error('Error accessing media devices:', error);
-            let errorMessage = 'Não foi possível acessar a câmera e/ou microfone.\n\n';
+            
+            // Build helpful error message
+            const hasAudio = state.localStream?.getAudioTracks().length > 0;
+            const hasVideo = state.localStream?.getVideoTracks().length > 0;
+            
+            let errorMessage = '';
             
             if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                errorMessage += 'Permissão negada.\n\n';
-                errorMessage += 'Para aceitar a chamada, você precisa permitir o acesso à câmera e microfone:\n';
-                errorMessage += '1. Clique no ícone de bloqueio/câmera na barra de endereço\n';
-                errorMessage += '2. Permita o acesso à câmera e microfone\n';
-                errorMessage += '3. Tente aceitar a chamada novamente';
+                if (!hasAudio && !hasVideo) {
+                    errorMessage = 'Permissão negada para câmera e microfone.\n\n';
+                    errorMessage += 'Para aceitar a chamada, você precisa permitir o acesso:\n';
+                    errorMessage += '1. Clique no ícone de bloqueio/câmera na barra de endereço\n';
+                    errorMessage += '2. Permita o acesso à câmera e/ou microfone\n';
+                    errorMessage += '3. Tente aceitar a chamada novamente';
+                } else {
+                    errorMessage = 'Permissão negada para ' + (!hasAudio ? 'microfone' : 'câmera') + '.\n';
+                    errorMessage += 'A chamada continuará com ' + (hasAudio ? 'áudio' : 'vídeo') + ' apenas.';
+                }
             } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-                errorMessage += 'Câmera ou microfone não foram encontrados no seu dispositivo.\n';
-                errorMessage += 'Certifique-se de que seu dispositivo possui câmera/microfone conectados.';
+                if (!hasAudio && !hasVideo) {
+                    errorMessage = 'Nenhum dispositivo de mídia encontrado.\n';
+                    errorMessage += 'Certifique-se de que seu dispositivo possui câmera ou microfone conectados.';
+                } else {
+                    errorMessage = 'Dispositivo ' + (!hasAudio ? 'de microfone' : 'de câmera') + ' não encontrado.\n';
+                    errorMessage += 'A chamada continuará com ' + (hasAudio ? 'áudio' : 'vídeo') + ' apenas.';
+                }
             } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-                errorMessage += 'Câmera ou microfone já estão em uso por outro aplicativo.\n';
-                errorMessage += 'Feche outros aplicativos que possam estar usando a câmera/microfone e tente novamente.';
-            } else if (error.name === 'OverconstrainedError') {
-                errorMessage += 'As configurações solicitadas não são suportadas pelo seu dispositivo.\n';
-                errorMessage += 'Tentando com configurações alternativas...';
-                // Don't throw for OverconstrainedError in some cases, let caller handle retry
+                if (!hasAudio && !hasVideo) {
+                    errorMessage = 'Câmera e microfone já estão em uso por outro aplicativo.\n';
+                    errorMessage += 'Feche outros aplicativos e tente novamente.';
+                } else {
+                    errorMessage = (!hasAudio ? 'Microfone' : 'Câmera') + ' já está em uso.\n';
+                    errorMessage += 'A chamada continuará com ' + (hasAudio ? 'áudio' : 'vídeo') + ' apenas.';
+                }
             } else {
-                errorMessage += 'Erro: ' + (error.message || error.name || 'Erro desconhecido');
+                if (!hasAudio && !hasVideo) {
+                    errorMessage = 'Erro ao acessar dispositivos de mídia: ' + (error.message || error.name || 'Erro desconhecido');
+                } else {
+                    // If we have at least one, don't show error, just log it
+                    console.warn('Partial success - continuing with available devices');
+                    return state.localStream; // Return what we have
+                }
             }
             
-            alert(errorMessage);
+            // Only show alert if we have nothing
+            if (!hasAudio && !hasVideo && errorMessage) {
+                alert(errorMessage);
+                throw error;
+            } else if (errorMessage) {
+                // If we have something, just log the warning
+                console.warn(errorMessage);
+                return state.localStream; // Return what we have
+            }
+            
+            // If we have a stream with at least one track, return it
+            if (state.localStream && (state.localStream.getAudioTracks().length > 0 || state.localStream.getVideoTracks().length > 0)) {
+                return state.localStream;
+            }
+            
             throw error;
         }
     }
@@ -1051,6 +1261,29 @@ document.addEventListener('DOMContentLoaded', function() {
             
             state.isVideoCall = isVideo;
             await getLocalStream(isVideo);
+            
+            // Adjust call type based on what we actually got
+            if (state.localStream) {
+                const hasVideo = state.localStream.getVideoTracks().length > 0;
+                const hasAudio = state.localStream.getAudioTracks().length > 0;
+                
+                // If we requested video but don't have it, adjust to voice call
+                if (isVideo && !hasVideo && hasAudio) {
+                    console.log('Video requested but not available - adjusting to voice call');
+                    state.isVideoCall = false;
+                }
+                // If we requested video and have it, keep it as video call
+                // If we requested voice and have audio, keep it as voice call
+                // If we only have video (no audio), it's still a video call but without audio
+                
+                console.log('Call type adjusted:', {
+                    requested: isVideo ? 'video' : 'voice',
+                    actual: state.isVideoCall ? 'video' : 'voice',
+                    hasVideo: hasVideo,
+                    hasAudio: hasAudio
+                });
+            }
+            
             await createPeerConnection();
             
             // Verify transceivers before creating offer
