@@ -355,6 +355,7 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedFile: null,
         callStartTime: null,
         callTimerInterval: null,
+        trackMonitorInterval: null, // Monitor tracks to ensure they stay active
         processedSignalIds: new Set(), // Track processed signals to avoid duplicates
         isAcceptingCall: false, // Prevent multiple accept attempts
         connectionTimeout: null, // Timeout to detect stuck connections
@@ -368,21 +369,35 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log('Device type:', isMobile ? 'Mobile' : 'Desktop');
     
-    // WebRTC Config with multiple STUN servers for better connectivity
-    // Mobile devices may need more aggressive ICE gathering
+    // WebRTC Config with STUN and TURN servers for better connectivity
+    // TURN servers are essential for NAT traversal in complex network scenarios
     const rtcConfig = {
         iceServers: [
+            // STUN servers (for discovery)
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' },
             { urls: 'stun:stun.stunprotocol.org:3478' },
-            { urls: 'stun:stun.voiparound.com' },
-            { urls: 'stun:stun.voipbuster.com' }
+            // Public TURN servers (for relay when direct connection fails)
+            // Note: These are public servers with limited bandwidth, but help with NAT traversal
+            { 
+                urls: 'turn:openrelay.metered.ca:80',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            { 
+                urls: 'turn:openrelay.metered.ca:443',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            { 
+                urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            }
         ],
         iceCandidatePoolSize: isMobile ? 20 : 10, // More candidates for mobile
-        iceTransportPolicy: 'all', // Use both relay and host candidates
+        iceTransportPolicy: 'all', // Use both relay and host candidates (important!)
         bundlePolicy: 'max-bundle', // Better for mobile
         rtcpMuxPolicy: 'require' // Required for mobile compatibility
     };
@@ -895,32 +910,136 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 startCallTimer();
+                
+                // Monitor tracks to ensure they stay active
+                if (!state.trackMonitorInterval) {
+                    state.trackMonitorInterval = setInterval(() => {
+                        if (!state.peerConnection || !state.inCall) {
+                            if (state.trackMonitorInterval) {
+                                clearInterval(state.trackMonitorInterval);
+                                state.trackMonitorInterval = null;
+                            }
+                            return;
+                        }
+                        
+                        // Check remote stream tracks
+                        if (state.remoteStream) {
+                            const tracks = state.remoteStream.getTracks();
+                            const activeTracks = tracks.filter(t => 
+                                t.readyState === 'live' && t.enabled
+                            );
+                            
+                            // If we have active tracks but connection says failed, try to keep it going
+                            if (activeTracks.length > 0 && 
+                                state.peerConnection.connectionState === 'failed') {
+                                console.log('Tracks are active despite failed connection state - attempting recovery');
+                                try {
+                                    state.peerConnection.restartIce();
+                                } catch (err) {
+                                    console.warn('Error restarting ICE in monitor:', err);
+                                }
+                            }
+                            
+                            // Log track status periodically
+                            if (tracks.length > 0) {
+                                console.log('Track monitor:', {
+                                    totalTracks: tracks.length,
+                                    activeTracks: activeTracks.length,
+                                    connectionState: state.peerConnection.connectionState,
+                                    iceState: state.peerConnection.iceConnectionState
+                                });
+                            }
+                        }
+                    }, 5000); // Check every 5 seconds
+                }
+                
                 setTimeout(() => {
                     elements.callStatus.classList.add('hidden');
                 }, 2000);
             } else if (connectionState === 'failed') {
-                console.error('Connection failed');
+                console.error('Connection failed', {
+                    iceState: state.peerConnection.iceConnectionState,
+                    signalingState: state.peerConnection.signalingState
+                });
                 
-                // Try to restart ICE if connection failed
+                // Check if we have active tracks despite connection failure
+                const hasActiveTracks = state.remoteStream && 
+                    state.remoteStream.getTracks().some(track => 
+                        track.readyState === 'live' && track.enabled
+                    );
+                
+                if (hasActiveTracks) {
+                    console.log('Connection failed but tracks are active - attempting recovery');
+                    // Don't show error immediately if tracks are working
+                    updateCallStatus('Conexão instável - tentando manter...');
+                }
+                
+                // Try to restart ICE if connection failed (may recover)
                 if (state.peerConnection && state.inCall) {
                     console.log('Attempting to restart ICE...');
                     try {
                         state.peerConnection.restartIce();
-                        updateCallStatus('Reconectando...');
+                        if (!hasActiveTracks) {
+                            updateCallStatus('Reconectando...');
+                        }
+                        
+                        // Give it more time to recover if we have active tracks
+                        const retryTimeout = hasActiveTracks ? 10000 : 5000;
+                        setTimeout(() => {
+                            if (state.peerConnection && state.peerConnection.connectionState === 'failed') {
+                                // Check again if tracks are still active
+                                const stillActive = state.remoteStream && 
+                                    state.remoteStream.getTracks().some(track => 
+                                        track.readyState === 'live' && track.enabled
+                                    );
+                                
+                                if (stillActive) {
+                                    console.warn('Connection state is failed but tracks remain active - continuing');
+                                    updateCallStatus('Conexão mantida');
+                                } else {
+                                    console.error('Connection still failed after ICE restart - no active tracks');
+                                    updateCallStatus('Conexão perdida - tente novamente');
+                                }
+                            }
+                        }, retryTimeout);
                     } catch (restartError) {
                         console.error('Error restarting ICE:', restartError);
-                        updateCallStatus('Conexão perdida');
+                        if (!hasActiveTracks) {
+                            updateCallStatus('Conexão perdida');
+                        }
                     }
                 } else {
-                    updateCallStatus('Conexão perdida');
+                    if (!hasActiveTracks) {
+                        updateCallStatus('Conexão perdida');
+                    }
                 }
             } else if (connectionState === 'disconnected') {
-                console.warn('Connection disconnected');
-                // Don't immediately show error, might reconnect
+                console.warn('Connection disconnected', {
+                    iceState: state.peerConnection.iceConnectionState
+                });
+                
+                // Disconnected can be temporary - wait a bit before showing error
                 if (state.peerConnection && state.peerConnection.iceConnectionState === 'failed') {
+                    // ICE failed - connection is really lost
                     updateCallStatus('Conexão perdida');
                 } else {
+                    // May reconnect - show status and wait
                     updateCallStatus('Reconectando...');
+                    
+                    // If still disconnected after a few seconds, try to restart ICE
+                    setTimeout(() => {
+                        if (state.peerConnection && 
+                            state.peerConnection.connectionState === 'disconnected' &&
+                            state.peerConnection.iceConnectionState !== 'failed' &&
+                            state.inCall) {
+                            console.log('Still disconnected, attempting ICE restart...');
+                            try {
+                                state.peerConnection.restartIce();
+                            } catch (err) {
+                                console.error('Error restarting ICE after disconnect:', err);
+                            }
+                        }
+                    }, 3000);
                 }
             } else if (connectionState === 'connecting') {
                 updateCallStatus('Conectando...');
@@ -941,21 +1060,77 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (iceState === 'failed') {
                 console.error('ICE connection failed');
                 
+                // Check if we have active tracks - if so, connection might still work
+                const hasActiveTracks = state.remoteStream && 
+                    state.remoteStream.getTracks().some(track => 
+                        track.readyState === 'live' && track.enabled
+                    );
+                
+                console.log('ICE failed, checking stream status:', {
+                    hasRemoteStream: !!state.remoteStream,
+                    hasActiveTracks: hasActiveTracks,
+                    trackStates: state.remoteStream ? 
+                        state.remoteStream.getTracks().map(t => ({
+                            kind: t.kind,
+                            enabled: t.enabled,
+                            readyState: t.readyState
+                        })) : []
+                });
+                
+                // If we have active tracks, try to keep them alive and restart ICE
+                if (hasActiveTracks) {
+                    console.log('ICE failed but tracks are active - attempting recovery...');
+                    updateCallStatus('Reconectando...');
+                }
+                
                 // Try to restart ICE
                 if (state.peerConnection && state.inCall) {
                     console.log('ICE failed, attempting restart...');
                     try {
                         state.peerConnection.restartIce();
-                        updateCallStatus('Reconectando...');
+                        if (!hasActiveTracks) {
+                            updateCallStatus('Reconectando...');
+                        }
+                        
+                        // Give it more time to recover if we have tracks
+                        const retryTimeout = hasActiveTracks ? 10000 : 5000;
+                        setTimeout(() => {
+                            if (state.peerConnection && 
+                                state.peerConnection.iceConnectionState === 'failed') {
+                                if (!hasActiveTracks) {
+                                    console.error('ICE restart failed - no recovery possible');
+                                    updateCallStatus('Falha na conexão ICE');
+                                } else {
+                                    // Even if ICE failed, if tracks are live, try to continue
+                                    console.warn('ICE failed but tracks remain active - attempting to continue');
+                                    updateCallStatus('Conexão instável - tentando manter...');
+                                }
+                            }
+                        }, retryTimeout);
                     } catch (restartError) {
                         console.error('Error restarting ICE:', restartError);
-                        updateCallStatus('Falha na conexão ICE');
+                        if (!hasActiveTracks) {
+                            updateCallStatus('Falha na conexão ICE');
+                        }
                     }
                 } else {
-                    updateCallStatus('Falha na conexão ICE');
+                    if (!hasActiveTracks) {
+                        updateCallStatus('Falha na conexão ICE');
+                    }
                 }
             } else if (iceState === 'disconnected') {
                 console.warn('ICE disconnected, may reconnect');
+                
+                // Check if tracks are still active during disconnect
+                if (state.remoteStream) {
+                    const activeTracks = state.remoteStream.getTracks().filter(t => 
+                        t.readyState === 'live' && t.enabled
+                    );
+                    if (activeTracks.length > 0) {
+                        console.log('ICE disconnected but tracks are still active - waiting for reconnect');
+                    }
+                }
+                
                 // Don't show error immediately, might reconnect
             } else if (iceState === 'checking') {
                 console.log('ICE checking...');
@@ -1742,11 +1917,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
+            // Check if remote description is already set (avoid processing duplicate answers)
+            if (state.peerConnection.remoteDescription) {
+                const currentRemoteSDP = state.peerConnection.remoteDescription.sdp;
+                const incomingSDP = answer?.sdp;
+                
+                // If it's the same SDP, ignore (duplicate)
+                if (incomingSDP && currentRemoteSDP && 
+                    currentRemoteSDP.substring(0, 100) === incomingSDP.substring(0, 100)) {
+                    console.log('Ignoring duplicate answer - remote description already set');
+                    return;
+                }
+                
+                // If remote description is in stable state, we already processed an answer
+                if (state.peerConnection.signalingState === 'stable') {
+                    console.log('Ignoring answer - connection already has remote description in stable state');
+                    return;
+                }
+            }
+            
             console.log('Processing incoming answer...', {
                 hasPeerConnection: !!state.peerConnection,
                 answerType: answer?.type,
                 hasSDP: !!answer?.sdp,
-                connectionState: state.peerConnection?.connectionState
+                connectionState: state.peerConnection?.connectionState,
+                signalingState: state.peerConnection?.signalingState,
+                hasRemoteDescription: !!state.peerConnection?.remoteDescription
             });
             
             // Validate and clean answer
@@ -1786,10 +1982,25 @@ document.addEventListener('DOMContentLoaded', function() {
             updateCallStatus('Conectando...');
         } catch (error) {
             console.error('Error handling answer:', error);
+            
+            // If error is about wrong state, it's likely a duplicate answer - just ignore
+            if (error.message && (error.message.includes('wrong state') || 
+                                  error.message.includes('stable') ||
+                                  error.message.includes('InvalidStateError'))) {
+                console.warn('Answer error (likely duplicate):', error.message);
+                // Don't end call, just return - connection might already be established
+                return;
+            }
+            
             if (error.message && error.message.includes('SDP')) {
                 console.error('SDP parsing error in answer:', error);
-                endCall(false);
-                alert('Erro na conexão. A chamada será encerrada.');
+                // Only end call if we don't have a remote description yet
+                if (!state.peerConnection.remoteDescription) {
+                    endCall(false);
+                    alert('Erro na conexão. A chamada será encerrada.');
+                } else {
+                    console.warn('SDP error but remote description exists - connection may still work');
+                }
             }
         }
     }
@@ -2278,6 +2489,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function endCall(sendHangup = true) {
         stopCallTimer();
         
+        // Clear track monitor
+        if (state.trackMonitorInterval) {
+            clearInterval(state.trackMonitorInterval);
+            state.trackMonitorInterval = null;
+        }
+        
         // Clear connection timeout
         if (state.connectionTimeout) {
             clearTimeout(state.connectionTimeout);
@@ -2602,6 +2819,20 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (!elements.incomingCallModal.classList.contains('hidden') && signal.type === 'offer') {
                                 console.warn('Ignored offer: modal already open');
                                 return;
+                            }
+                            
+                            // Ignore duplicate answers if we already have a remote description
+                            if (signal.type === 'answer' && state.peerConnection && state.peerConnection.remoteDescription) {
+                                // Check if this is a duplicate answer
+                                const currentRemoteSDP = state.peerConnection.remoteDescription.sdp;
+                                const incomingSDP = payload?.sdp;
+                                
+                                if (incomingSDP && currentRemoteSDP && 
+                                    (currentRemoteSDP.substring(0, 100) === incomingSDP.substring(0, 100) ||
+                                     state.peerConnection.signalingState === 'stable')) {
+                                    console.log('Ignoring duplicate answer signal:', signal.id);
+                                    return;
+                                }
                             }
 
                             switch(signal.type) {
