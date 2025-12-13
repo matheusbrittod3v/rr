@@ -358,7 +358,8 @@ document.addEventListener('DOMContentLoaded', function() {
         processedSignalIds: new Set(), // Track processed signals to avoid duplicates
         isAcceptingCall: false, // Prevent multiple accept attempts
         connectionTimeout: null, // Timeout to detect stuck connections
-        answerReceived: false // Track if answer was received
+        answerReceived: false, // Track if answer was received
+        pendingCandidates: [] // Queue for ICE candidates received before remote description
     };
     
     // Detect mobile device
@@ -516,14 +517,21 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Add local stream tracks
         if (state.localStream) {
-            const tracks = state.localStream.getTracks();
+            // For voice calls, only add audio tracks (not video)
+            // For video calls, add both audio and video tracks
+            const tracksToAdd = state.isVideoCall 
+                ? state.localStream.getTracks()
+                : state.localStream.getAudioTracks();
+            
             console.log('Adding local tracks to peer connection:', {
-                totalTracks: tracks.length,
-                videoTracks: tracks.filter(t => t.kind === 'video').length,
-                audioTracks: tracks.filter(t => t.kind === 'audio').length
+                totalTracks: state.localStream.getTracks().length,
+                videoTracks: state.localStream.getVideoTracks().length,
+                audioTracks: state.localStream.getAudioTracks().length,
+                tracksToAdd: tracksToAdd.length,
+                isVideoCall: state.isVideoCall
             });
             
-            tracks.forEach(track => {
+            tracksToAdd.forEach(track => {
                 console.log(`Adding local ${track.kind} track:`, {
                     enabled: track.enabled,
                     readyState: track.readyState,
@@ -535,6 +543,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     transport: sender.transport?.state
                 });
             });
+            
+            // If it's a voice call but we have video tracks in stream, stop them
+            if (!state.isVideoCall && state.localStream.getVideoTracks().length > 0) {
+                console.log('Voice call detected - stopping video tracks from local stream');
+                state.localStream.getVideoTracks().forEach(track => {
+                    track.stop();
+                    console.log('Stopped video track for voice call');
+                });
+            }
             
             // Ensure transceivers are configured for sendrecv (bidirectional)
             const transceivers = state.peerConnection.getTransceivers();
@@ -548,101 +565,188 @@ document.addEventListener('DOMContentLoaded', function() {
             console.warn('No local stream available when creating peer connection');
         }
         
-        // Handle remote stream
+        // Handle remote stream - improved for mobile compatibility
         state.peerConnection.ontrack = (event) => {
             console.log('Received remote track:', {
                 kind: event.track.kind,
                 id: event.track.id,
                 streams: event.streams.length,
                 trackEnabled: event.track.enabled,
-                trackReadyState: event.track.readyState
+                trackReadyState: event.track.readyState,
+                transceiver: event.transceiver?.currentDirection,
+                receiver: event.receiver?.track?.kind
             });
             
-            // Get the remote stream from the event
-            let remoteStream = null;
-            if (event.streams && event.streams.length > 0) {
-                remoteStream = event.streams[0];
-            } else {
-                // If no stream in event, create one or use existing
-                if (!state.remoteStream) {
-                    remoteStream = new MediaStream();
-                    state.remoteStream = remoteStream;
-                } else {
-                    remoteStream = state.remoteStream;
-                }
-                remoteStream.addTrack(event.track);
+            // Always ensure we have a remote stream
+            if (!state.remoteStream) {
+                state.remoteStream = new MediaStream();
+                console.log('Created new remote stream');
             }
             
-            // Update state
-            state.remoteStream = remoteStream;
+            // Add track to our remote stream (always add, even if it exists in event.streams)
+            // This ensures we capture all tracks even if they arrive separately
+            const existingTrack = state.remoteStream.getTracks().find(t => 
+                t.id === event.track.id || 
+                (t.kind === event.track.kind && t.readyState === 'live')
+            );
             
-            // Assign to video elements
-            if (remoteStream) {
+            if (!existingTrack) {
+                state.remoteStream.addTrack(event.track);
+                console.log(`Added ${event.track.kind} track to remote stream. Total tracks:`, {
+                    video: state.remoteStream.getVideoTracks().length,
+                    audio: state.remoteStream.getAudioTracks().length
+                });
+            } else {
+                console.log(`Track ${event.track.kind} already in stream, skipping duplicate`);
+            }
+            
+            // Also use stream from event if available (for compatibility)
+            let eventStream = null;
+            if (event.streams && event.streams.length > 0) {
+                eventStream = event.streams[0];
+                // Add any tracks from event stream that we don't have yet
+                eventStream.getTracks().forEach(track => {
+                    const exists = state.remoteStream.getTracks().some(t => t.id === track.id);
+                    if (!exists) {
+                        state.remoteStream.addTrack(track);
+                        console.log(`Added track from event stream: ${track.kind}`);
+                    }
+                });
+            }
+            
+            // Assign to video elements - ensure stream is always updated
+            const remoteStream = state.remoteStream;
+            if (remoteStream && remoteStream.getTracks().length > 0) {
                 console.log('Assigning remote stream to video elements...', {
                     videoTracks: remoteStream.getVideoTracks().length,
-                    audioTracks: remoteStream.getAudioTracks().length
+                    audioTracks: remoteStream.getAudioTracks().length,
+                    totalTracks: remoteStream.getTracks().length
                 });
                 
-                // Ensure video elements are set to autoplay before assigning stream
+                // Configure video elements for mobile compatibility
                 elements.remoteVideo.autoplay = true;
                 elements.remoteVideo.playsInline = true;
-                elements.remoteVideo.muted = false; // Ensure audio plays
+                elements.remoteVideo.muted = false; // CRITICAL: Ensure audio plays
+                elements.remoteVideo.setAttribute('playsinline', 'true');
+                elements.remoteVideo.setAttribute('webkit-playsinline', 'true');
+                
                 elements.minimizedRemoteVideo.autoplay = true;
                 elements.minimizedRemoteVideo.playsInline = true;
                 elements.minimizedRemoteVideo.muted = false;
+                elements.minimizedRemoteVideo.setAttribute('playsinline', 'true');
+                elements.minimizedRemoteVideo.setAttribute('webkit-playsinline', 'true');
                 
-                // Only assign stream if it's different (avoid interrupting play)
-                if (elements.remoteVideo.srcObject !== remoteStream) {
-                    elements.remoteVideo.srcObject = remoteStream;
-                }
-                if (elements.minimizedRemoteVideo.srcObject !== remoteStream) {
-                    elements.minimizedRemoteVideo.srcObject = remoteStream;
-                }
+                // Always update srcObject to ensure latest tracks are used
+                // This is important when tracks arrive separately (common in mobile)
+                elements.remoteVideo.srcObject = remoteStream;
+                elements.minimizedRemoteVideo.srcObject = remoteStream;
                 
-                // Mobile needs more time and retries for play()
-                const playDelay = isMobile ? 300 : 100;
-                const maxRetries = isMobile ? 5 : 3;
-                let retryCount = 0;
+                console.log('Stream assigned to video elements');
                 
-                const tryPlayVideo = (videoElement, elementName) => {
-                    if (videoElement.paused) {
+                // Force play with retries - critical for mobile
+                const playDelay = isMobile ? 500 : 200;
+                const maxRetries = isMobile ? 8 : 5;
+                
+                const tryPlayVideo = (videoElement, elementName, retryCount = 0) => {
+                    // Check if element has tracks
+                    const srcObject = videoElement.srcObject;
+                    if (srcObject) {
+                        const hasVideoTracks = srcObject.getVideoTracks().length > 0;
+                        const hasAudioTracks = srcObject.getAudioTracks().length > 0;
+                        
+                        if (!hasVideoTracks && !hasAudioTracks) {
+                            console.warn(`${elementName}: No tracks in stream yet, waiting...`);
+                            if (retryCount < maxRetries) {
+                                setTimeout(() => tryPlayVideo(videoElement, elementName, retryCount + 1), playDelay);
+                            }
+                            return;
+                        }
+                        
+                        // Verify tracks are live/ready
+                        const tracks = srcObject.getTracks();
+                        const liveTracks = tracks.filter(t => t.readyState === 'live' || t.readyState === 'ended');
+                        if (liveTracks.length === 0 && retryCount < maxRetries) {
+                            console.log(`${elementName}: Waiting for tracks to become live...`);
+                            setTimeout(() => tryPlayVideo(videoElement, elementName, retryCount + 1), playDelay);
+                            return;
+                        }
+                    }
+                    
+                    // Try to play
+                    if (videoElement.paused || videoElement.readyState < 2) {
                         videoElement.play().then(() => {
-                            console.log(`${elementName} started playing`);
+                            console.log(`${elementName} started playing successfully`, {
+                                paused: videoElement.paused,
+                                readyState: videoElement.readyState,
+                                muted: videoElement.muted,
+                                hasVideo: srcObject?.getVideoTracks().length > 0,
+                                hasAudio: srcObject?.getAudioTracks().length > 0
+                            });
+                            
+                            // For audio tracks, ensure volume is not zero
+                            if (videoElement.volume === 0) {
+                                videoElement.volume = 1.0;
+                                console.log(`${elementName}: Volume was 0, set to 1.0`);
+                            }
                         }).catch(err => {
                             // Ignore AbortError (interrupted by new load)
                             if (err.name !== 'AbortError' && retryCount < maxRetries) {
-                                retryCount++;
-                                console.warn(`${elementName} play failed, retry ${retryCount}/${maxRetries}:`, err.name);
+                                console.warn(`${elementName} play failed (attempt ${retryCount + 1}/${maxRetries}):`, err.name, err.message);
                                 setTimeout(() => {
-                                    tryPlayVideo(videoElement, elementName);
-                                }, playDelay * retryCount);
+                                    tryPlayVideo(videoElement, elementName, retryCount + 1);
+                                }, playDelay * (retryCount + 1));
                             } else if (err.name !== 'AbortError') {
                                 console.error(`Error playing ${elementName} after ${maxRetries} retries:`, err);
                             }
                         });
+                    } else {
+                        console.log(`${elementName} is already playing`);
                     }
                 };
                 
+                // Start trying to play after a short delay
                 setTimeout(() => {
-                    retryCount = 0;
                     tryPlayVideo(elements.remoteVideo, 'Remote video');
-                    
-                    retryCount = 0;
                     tryPlayVideo(elements.minimizedRemoteVideo, 'Minimized remote video');
                 }, playDelay);
                 
-                // Add event listeners to detect when video starts (only once)
+                // Add event listeners to detect when video starts and update stream if needed
                 if (!elements.remoteVideo.hasAttribute('data-listener-added')) {
                     elements.remoteVideo.setAttribute('data-listener-added', 'true');
+                    
                     elements.remoteVideo.addEventListener('playing', () => {
-                        console.log('Remote video is now playing');
+                        console.log('Remote video is now playing', {
+                            hasVideo: remoteStream.getVideoTracks().length > 0,
+                            hasAudio: remoteStream.getAudioTracks().length > 0,
+                            muted: elements.remoteVideo.muted
+                        });
                     });
                     
                     elements.remoteVideo.addEventListener('loadedmetadata', () => {
                         console.log('Remote video metadata loaded');
+                        // Ensure we have the latest stream
+                        if (state.remoteStream && elements.remoteVideo.srcObject !== state.remoteStream) {
+                            elements.remoteVideo.srcObject = state.remoteStream;
+                        }
                         // Try to play when metadata is loaded
                         if (elements.remoteVideo.paused) {
-                            elements.remoteVideo.play().catch(() => {});
+                            elements.remoteVideo.play().catch(err => {
+                                if (err.name !== 'AbortError') {
+                                    console.warn('Play on loadedmetadata failed:', err);
+                                }
+                            });
+                        }
+                    });
+                    
+                    // Listen for track additions to stream
+                    remoteStream.addEventListener('addtrack', (event) => {
+                        console.log('Track added to remote stream:', event.track.kind);
+                        // Update video element srcObject to ensure it has the new track
+                        if (elements.remoteVideo.srcObject !== remoteStream) {
+                            elements.remoteVideo.srcObject = remoteStream;
+                        }
+                        if (elements.minimizedRemoteVideo.srcObject !== remoteStream) {
+                            elements.minimizedRemoteVideo.srcObject = remoteStream;
                         }
                     });
                 }
@@ -693,23 +797,79 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 updateCallStatus('Conectado');
                 
-                // Verify transceivers and streams
+                // Verify transceivers and ensure they're configured correctly
                 const transceivers = state.peerConnection.getTransceivers();
-                console.log('Transceivers:', transceivers.map(t => ({
-                    kind: t.receiver.track?.kind,
+                console.log('Transceivers after connection:', transceivers.map(t => ({
+                    kind: t.receiver.track?.kind || t.sender.track?.kind,
                     direction: t.direction,
                     currentDirection: t.currentDirection,
-                    receiverTrack: t.receiver.track?.enabled
+                    receiverTrack: t.receiver.track ? {
+                        kind: t.receiver.track.kind,
+                        enabled: t.receiver.track.enabled,
+                        readyState: t.receiver.track.readyState
+                    } : null
                 })));
                 
-                // Check if we have remote stream
+                // Collect all receiver tracks and ensure they're in the remote stream
+                transceivers.forEach(transceiver => {
+                    if (transceiver.receiver && transceiver.receiver.track) {
+                        const track = transceiver.receiver.track;
+                        if (!state.remoteStream) {
+                            state.remoteStream = new MediaStream();
+                        }
+                        
+                        // Check if track is already in stream
+                        const exists = state.remoteStream.getTracks().some(t => t.id === track.id);
+                        if (!exists) {
+                            state.remoteStream.addTrack(track);
+                            console.log(`Added ${track.kind} track from transceiver to remote stream`);
+                        }
+                    }
+                });
+                
+                // Check and update remote stream
                 if (state.remoteStream) {
-                    console.log('Remote stream available:', {
-                        videoTracks: state.remoteStream.getVideoTracks().length,
-                        audioTracks: state.remoteStream.getAudioTracks().length
+                    const videoTracks = state.remoteStream.getVideoTracks();
+                    const audioTracks = state.remoteStream.getAudioTracks();
+                    
+                    console.log('Remote stream state:', {
+                        videoTracks: videoTracks.length,
+                        audioTracks: audioTracks.length,
+                        videoTracksEnabled: videoTracks.filter(t => t.enabled).length,
+                        audioTracksEnabled: audioTracks.filter(t => t.enabled).length,
+                        videoTracksLive: videoTracks.filter(t => t.readyState === 'live').length,
+                        audioTracksLive: audioTracks.filter(t => t.readyState === 'live').length
+                    });
+                    
+                    // Ensure video elements have the latest stream
+                    if (elements.remoteVideo.srcObject !== state.remoteStream) {
+                        elements.remoteVideo.srcObject = state.remoteStream;
+                    }
+                    if (elements.minimizedRemoteVideo.srcObject !== state.remoteStream) {
+                        elements.minimizedRemoteVideo.srcObject = state.remoteStream;
+                    }
+                    
+                    // Ensure audio plays - critical for mobile
+                    elements.remoteVideo.muted = false;
+                    elements.remoteVideo.volume = 1.0;
+                    if (elements.remoteVideo.paused) {
+                        elements.remoteVideo.play().catch(err => {
+                            console.warn('Auto-play failed, user interaction may be required:', err);
+                        });
+                    }
+                    
+                    // Log track details for debugging
+                    audioTracks.forEach((track, index) => {
+                        console.log(`Audio track ${index}:`, {
+                            id: track.id,
+                            enabled: track.enabled,
+                            readyState: track.readyState,
+                            muted: track.muted,
+                            settings: track.getSettings()
+                        });
                     });
                 } else {
-                    console.warn('No remote stream available after connection');
+                    console.warn('No remote stream available after connection - this may indicate a problem');
                 }
                 
                 startCallTimer();
@@ -851,14 +1011,28 @@ document.addEventListener('DOMContentLoaded', function() {
             return stream;
         } catch (error) {
             console.error('Error accessing media devices:', error);
-            let errorMessage = 'Erro ao acessar câmera/microfone.';
-            if (error.name === 'NotAllowedError') {
-                errorMessage += ' Por favor, permita o acesso à câmera e microfone nas configurações do navegador.';
-            } else if (error.name === 'NotFoundError') {
-                errorMessage += ' Câmera ou microfone não encontrados.';
-            } else if (error.name === 'NotReadableError') {
-                errorMessage += ' Câmera ou microfone já estão em uso por outro aplicativo.';
+            let errorMessage = 'Não foi possível acessar a câmera e/ou microfone.\n\n';
+            
+            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                errorMessage += 'Permissão negada.\n\n';
+                errorMessage += 'Para aceitar a chamada, você precisa permitir o acesso à câmera e microfone:\n';
+                errorMessage += '1. Clique no ícone de bloqueio/câmera na barra de endereço\n';
+                errorMessage += '2. Permita o acesso à câmera e microfone\n';
+                errorMessage += '3. Tente aceitar a chamada novamente';
+            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                errorMessage += 'Câmera ou microfone não foram encontrados no seu dispositivo.\n';
+                errorMessage += 'Certifique-se de que seu dispositivo possui câmera/microfone conectados.';
+            } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+                errorMessage += 'Câmera ou microfone já estão em uso por outro aplicativo.\n';
+                errorMessage += 'Feche outros aplicativos que possam estar usando a câmera/microfone e tente novamente.';
+            } else if (error.name === 'OverconstrainedError') {
+                errorMessage += 'As configurações solicitadas não são suportadas pelo seu dispositivo.\n';
+                errorMessage += 'Tentando com configurações alternativas...';
+                // Don't throw for OverconstrainedError in some cases, let caller handle retry
+            } else {
+                errorMessage += 'Erro: ' + (error.message || error.name || 'Erro desconhecido');
             }
+            
             alert(errorMessage);
             throw error;
         }
@@ -871,6 +1045,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Cannot start call: already in call');
                 return;
             }
+            
+            // Clear pending candidates from previous call
+            state.pendingCandidates = [];
             
             state.isVideoCall = isVideo;
             await getLocalStream(isVideo);
@@ -973,8 +1150,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
             
-            const isVideo = offer.sdp && offer.sdp.includes('video');
+            // Detect if this is a video call by analyzing SDP media lines
+            const isVideo = offer.sdp ? isVideoCallSDP(offer.sdp) : false;
             state.isVideoCall = isVideo;
+            
+            console.log('Incoming call type detected:', {
+                isVideo: isVideo,
+                sdpLength: offer.sdp?.length
+            });
+            
             pendingOffer = offer;
             pendingOfferSignalId = signalId;
             
@@ -1004,11 +1188,29 @@ document.addEventListener('DOMContentLoaded', function() {
             
             state.isAcceptingCall = true;
             
-            // Close modal immediately
-            elements.incomingCallModal.classList.add('hidden');
+            // Clear pending candidates from previous call attempts
+            state.pendingCandidates = [];
             
-            const isVideo = pendingOffer.sdp && pendingOffer.sdp.includes('video');
+            // Detect if this is a video call by analyzing SDP media lines
+            const isVideo = pendingOffer.sdp ? isVideoCallSDP(pendingOffer.sdp) : false;
             state.isVideoCall = isVideo;
+            
+            console.log('Detected call type:', {
+                isVideo: isVideo,
+                sdpLength: pendingOffer.sdp?.length,
+                hasVideoMediaLine: pendingOffer.sdp?.includes('m=video')
+            });
+            
+            // Show a loading message in the modal while requesting permissions
+            const modalContent = elements.incomingCallModal.querySelector('p');
+            const originalText = modalContent?.textContent || '';
+            if (modalContent) {
+                if (isVideo) {
+                    modalContent.textContent = 'Solicitando permissões de câmera e microfone...';
+                } else {
+                    modalContent.textContent = 'Solicitando permissão de microfone...';
+                }
+            }
             
             // Mark this signal as processed
             if (pendingOfferSignalId) {
@@ -1052,8 +1254,47 @@ document.addEventListener('DOMContentLoaded', function() {
                 sdp: cleanedSDP
             };
             
-            await getLocalStream(isVideo);
-            await createPeerConnection();
+            // Get local stream first - if this fails, don't proceed
+            try {
+                await getLocalStream(isVideo);
+                // Close modal after successfully getting stream
+                elements.incomingCallModal.classList.add('hidden');
+            } catch (streamError) {
+                // If stream fails (permissions, etc), clean up and return
+                console.error('Failed to get local stream when accepting call:', streamError);
+                
+                // Restore original modal text
+                const modalContent = elements.incomingCallModal.querySelector('p');
+                if (modalContent) {
+                    modalContent.textContent = 'Alguém deseja iniciar uma chamada de vídeo/voz com você.';
+                }
+                
+                state.isAcceptingCall = false;
+                pendingOffer = null;
+                pendingOfferSignalId = null;
+                
+                // Don't close modal yet - let user see the error and try again
+                // The error message is already shown by getLocalStream
+                return;
+            }
+            
+            // Now create peer connection
+            try {
+                await createPeerConnection();
+            } catch (pcError) {
+                console.error('Failed to create peer connection:', pcError);
+                // Clean up stream if peer connection fails
+                if (state.localStream) {
+                    state.localStream.getTracks().forEach(track => track.stop());
+                    state.localStream = null;
+                }
+                state.isAcceptingCall = false;
+                pendingOffer = null;
+                pendingOfferSignalId = null;
+                elements.incomingCallModal.classList.add('hidden');
+                alert('Erro ao criar conexão. Tente novamente.');
+                return;
+            }
             
             // Create RTCSessionDescription with cleaned SDP
             // Try to set remote description with error handling
@@ -1135,6 +1376,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
+            // Process any pending ICE candidates now that remote description is set
+            await processPendingCandidates();
+            
             console.log('Creating answer...');
             
             // Ensure transceivers are configured correctly
@@ -1165,10 +1409,27 @@ document.addEventListener('DOMContentLoaded', function() {
             // Verify transceivers after setting local description
             const transceiversAfter = state.peerConnection.getTransceivers();
             console.log('Transceivers after answer:', transceiversAfter.map(t => ({
-                kind: t.receiver.track?.kind || 'unknown',
+                kind: t.receiver.track?.kind || t.sender.track?.kind || 'unknown',
                 direction: t.direction,
-                currentDirection: t.currentDirection
+                currentDirection: t.currentDirection,
+                hasReceiverTrack: !!t.receiver.track,
+                hasSenderTrack: !!t.sender.track
             })));
+            
+            // Ensure transceivers can receive media (important for voice-only calls)
+            transceiversAfter.forEach(transceiver => {
+                // For voice calls, ensure we can receive audio
+                if (!state.isVideoCall && transceiver.sender.track?.kind === 'audio') {
+                    // Already configured by addTrack, but ensure receiver is ready
+                    if (!transceiver.receiver.track && transceiver.direction === 'sendonly') {
+                        console.warn('Audio transceiver is sendonly, may need adjustment');
+                    }
+                }
+                // Ensure direction allows receiving
+                if (transceiver.direction === 'sendonly') {
+                    console.warn(`Transceiver ${transceiver.sender.track?.kind || 'unknown'} is sendonly, may not receive media`);
+                }
+            });
             
             sendSignal('answer', answer);
             console.log('Answer signal sent');
@@ -1205,16 +1466,39 @@ document.addEventListener('DOMContentLoaded', function() {
             state.isAcceptingCall = false;
         } catch (error) {
             console.error('Error accepting call:', error);
+            
+            // Clean up state
             state.isAcceptingCall = false;
             pendingOffer = null;
             pendingOfferSignalId = null;
-            endCall(false);
+            state.pendingCandidates = [];
             
-            let errorMessage = 'Erro ao aceitar chamada.';
-            if (error.message && error.message.includes('SDP')) {
-                errorMessage += ' Problema com a descrição da sessão. Tente iniciar uma nova chamada.';
+            // Clean up stream if it was created
+            if (state.localStream) {
+                state.localStream.getTracks().forEach(track => track.stop());
+                state.localStream = null;
             }
-            alert(errorMessage);
+            
+            // Clean up peer connection if it was created
+            if (state.peerConnection) {
+                state.peerConnection.close();
+                state.peerConnection = null;
+            }
+            
+            // Hide modals
+            elements.incomingCallModal.classList.add('hidden');
+            elements.callOverlay.classList.add('hidden');
+            
+            // Only show alert if it's not a permission error (those are already shown by getLocalStream)
+            if (!error.message || (!error.message.includes('permission') && !error.name?.includes('NotAllowed'))) {
+                let errorMessage = 'Erro ao aceitar chamada.';
+                if (error.message && error.message.includes('SDP')) {
+                    errorMessage += ' Problema com a descrição da sessão. Tente iniciar uma nova chamada.';
+                } else if (error.message) {
+                    errorMessage += ' ' + error.message;
+                }
+                alert(errorMessage);
+            }
         }
     }
 
@@ -1253,6 +1537,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const sessionDescription = new RTCSessionDescription(cleanAnswer);
             await state.peerConnection.setRemoteDescription(sessionDescription);
             
+            // Process any pending ICE candidates now that remote description is set
+            await processPendingCandidates();
+            
             // Mark answer as received
             state.answerReceived = true;
             
@@ -1281,6 +1568,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
+            // Check if remote description is set
+            // If not, queue the candidate to be processed later
+            if (!state.peerConnection.remoteDescription) {
+                console.log('Remote description not set yet, queuing candidate:', {
+                    candidate: candidate.candidate?.substring(0, 50),
+                    sdpMLineIndex: candidate.sdpMLineIndex
+                });
+                state.pendingCandidates.push(candidate);
+                return;
+            }
+            
             // Check if candidate is for a media line that exists
             const transceivers = state.peerConnection.getTransceivers();
             const sdpMLineIndex = candidate.sdpMLineIndex;
@@ -1295,7 +1593,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             console.log('Processing incoming ICE candidate:', {
-                candidate: candidate.candidate,
+                candidate: candidate.candidate?.substring(0, 50),
                 sdpMLineIndex: candidate.sdpMLineIndex,
                 sdpMid: candidate.sdpMid
             });
@@ -1322,6 +1620,14 @@ document.addEventListener('DOMContentLoaded', function() {
             // Some candidates may fail (e.g., for different media lines), that's OK
             // Only log as error if it's not a common case
             if (error.message && (error.message.includes('sdpMLineIndex') || error.message.includes('InvalidStateError'))) {
+                // If it's InvalidStateError and remote description is not set, queue it
+                if (error.message.includes('InvalidStateError') && !state.peerConnection?.remoteDescription) {
+                    console.log('Queueing candidate (remote description not set):', {
+                        candidate: candidate.candidate?.substring(0, 50)
+                    });
+                    state.pendingCandidates.push(candidate);
+                    return;
+                }
                 console.warn('Candidate skipped:', {
                     sdpMLineIndex: candidate.sdpMLineIndex,
                     error: error.message,
@@ -1332,7 +1638,57 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
+    
+    // Process queued candidates after remote description is set
+    async function processPendingCandidates() {
+        if (!state.peerConnection || !state.peerConnection.remoteDescription) {
+            return;
+        }
+        
+        if (state.pendingCandidates.length === 0) {
+            return;
+        }
+        
+        console.log(`Processing ${state.pendingCandidates.length} pending ICE candidates...`);
+        
+        const candidates = [...state.pendingCandidates];
+        state.pendingCandidates = [];
+        
+        for (const candidate of candidates) {
+            try {
+                await state.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                console.log('Queued ICE candidate added successfully');
+            } catch (error) {
+                // Some candidates may still fail (e.g., duplicate or invalid), that's OK
+                if (!error.message.includes('InvalidStateError')) {
+                    console.warn('Error adding queued candidate:', error.message);
+                }
+            }
+        }
+    }
 
+    // Helper function to detect if SDP is for video call
+    function isVideoCallSDP(sdpString) {
+        if (!sdpString || typeof sdpString !== 'string') {
+            return false;
+        }
+        
+        // Look for media description lines (m=video ...)
+        // A video call will have at least one "m=video" line
+        // A voice call will have only "m=audio" lines
+        const lines = sdpString.split('\n');
+        for (const line of lines) {
+            const trimmed = line.trim();
+            // Check for video media line: m=video <port> <proto> <fmt> ...
+            if (trimmed.startsWith('m=video ')) {
+                return true;
+            }
+        }
+        
+        // If no m=video found, it's a voice call
+        return false;
+    }
+    
     // Helper function to clean and validate SDP
     function cleanSDP(sdpString) {
         if (!sdpString || typeof sdpString !== 'string') {
@@ -1712,6 +2068,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear pending call state
         pendingOffer = null;
         pendingOfferSignalId = null;
+        state.pendingCandidates = [];
         state.isAcceptingCall = false;
         state.inCall = false;
         state.isCallMinimized = false;
