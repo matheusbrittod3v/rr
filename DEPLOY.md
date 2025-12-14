@@ -165,6 +165,16 @@ Após o deploy, verifique:
 - Certifique-se de que `DB_CONNECTION=pgsql` está configurado corretamente
 - Se estiver usando MySQL, certifique-se de que `DB_CONNECTION=mysql` está configurado
 
+**Erro: "nginx: [emerg] server directive is not allowed here"**
+- Isso ocorre quando há um arquivo `nginx.template.conf` mal configurado
+- O arquivo foi removido - o Nixpacks agora usa sua configuração padrão
+- Se precisar de configuração customizada do nginx, consulte a documentação do Nixpacks
+
+**Warnings sobre variáveis de ambiente não definidas (REVERB_*, PUSHER_*, etc.)**
+- Esses são apenas avisos informativos
+- Se você não estiver usando broadcasting, pode ignorá-los com segurança
+- Para removê-los, defina as variáveis ou remova as referências nos arquivos de configuração
+
 **Assets não carregam**
 - Verifique se `npm run build` foi executado
 - Verifique se `/public/build` existe e tem os arquivos
