@@ -1,0 +1,41 @@
+# Dockerfile alternativo para servidor Reverb standalone
+# Use este arquivo se preferir usar Docker diretamente ao invés do Nixpacks
+
+FROM php:8.3-cli
+
+# Instalar dependências do sistema
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    zip \
+    unzip \
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Instalar Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Instalar Redis extension
+RUN pecl install redis && docker-php-ext-enable redis
+
+# Definir diretório de trabalho
+WORKDIR /app
+
+# Copiar arquivos do projeto
+COPY . /app
+
+# Instalar dependências PHP
+RUN composer install --no-dev --optimize-autoloader --no-interaction
+
+# Cache de configuração
+RUN php artisan config:cache
+
+# Expor porta do Reverb
+EXPOSE 8080
+
+# Comando para iniciar o servidor Reverb
+CMD ["php", "artisan", "reverb:start"]
+
