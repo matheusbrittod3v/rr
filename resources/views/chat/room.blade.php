@@ -2725,7 +2725,7 @@
     
     // Configurar Echo para mensagens e sinais
     const roomCode = "{{ $chatRoom->room_code }}";
-    const currentUserType = "{{ auth('admin')->check() ? 'admin' : 'client' }}";
+    const currentUserType = "{{ session('chat_user_role', 'client') }}";
     
     // Escutar mensagens do chat
     window.Echo.channel(`chat-room.${roomCode}`)
