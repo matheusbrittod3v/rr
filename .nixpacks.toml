@@ -2,22 +2,21 @@
 nixPkgs = [
   "php83",
   "php83Packages.composer",
-
-  # Extensões obrigatórias
-  "php83Extensions.intl",
-  "php83Extensions.zip",
-  "php83Extensions.mbstring",
-  "php83Extensions.bcmath",
-  "php83Extensions.curl",
-  "php83Extensions.gd",
-  "php83Extensions.pdo",
-  "php83Extensions.pdo_mysql",
-  "php83Extensions.redis",
-  "php83Extensions.opcache",
-
-  # Frontend / infra
   "nodejs_20",
   "nginx"
+]
+
+phpExtensions = [
+  "intl",
+  "zip",
+  "mbstring",
+  "bcmath",
+  "curl",
+  "gd",
+  "pdo",
+  "pdo_mysql",
+  "redis",
+  "opcache"
 ]
 
 [phases.build]
