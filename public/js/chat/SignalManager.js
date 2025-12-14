@@ -119,10 +119,8 @@ class SignalManager {
                                     return;
                                 }
                                 
-                                if (this.ui && !this.ui.elements.incomingCallModal?.classList.contains('hidden') && signal.type === 'offer') {
-                                    console.warn('Ignored offer: modal already open');
-                                    return;
-                                }
+                                // Check if modal is open (would need DOM access - handled in main)
+                                // This check is better done in the main handler
                                 
                                 if (signal.type === 'answer' && this.state.peerConnection && this.state.peerConnection.remoteDescription) {
                                     const currentRemoteSDP = this.state.peerConnection.remoteDescription.sdp;

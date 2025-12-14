@@ -1,22 +1,31 @@
 /**
  * Arquivo principal - Orquestra toda a aplicação
+ * 
+ * IMPORTANTE: As configurações são passadas via window.CHAT_CONFIG
+ * que deve ser definido no Blade antes de carregar este arquivo.
  */
 document.addEventListener('DOMContentLoaded', function() {
+    // Verificar se a configuração foi passada
+    if (!window.CHAT_CONFIG) {
+        console.error('CHAT_CONFIG não encontrado. Certifique-se de que foi definido antes de carregar Main.js');
+        return;
+    }
+    
     // Inicializar configuração
     const config = new Config(
-        "{{ $chatRoom->room_code }}",
-        "{{ csrf_token() }}",
+        window.CHAT_CONFIG.roomCode,
+        window.CHAT_CONFIG.csrfToken,
         {
-            sendMessageUrl: "{{ route('chat.send-message', $chatRoom->room_code) }}",
-            getMessagesUrl: "{{ route('chat.get-messages', $chatRoom->room_code) }}",
-            signalsUrl: "{{ route('chat.signals', $chatRoom->room_code) }}",
-            sendSignalUrl: "{{ route('chat.signal', $chatRoom->room_code) }}"
+            sendMessageUrl: window.CHAT_CONFIG.routes.sendMessageUrl,
+            getMessagesUrl: window.CHAT_CONFIG.routes.getMessagesUrl,
+            signalsUrl: window.CHAT_CONFIG.routes.signalsUrl,
+            sendSignalUrl: window.CHAT_CONFIG.routes.sendSignalUrl
         }
     );
     
     // Inicializar managers
     const uiManager = new UIManager();
-    const stateManager = new StateManager({{ $chatRoom->messages->max('id') ?? 0 }});
+    const stateManager = new StateManager(window.CHAT_CONFIG.lastMessageId || 0);
     const chatManager = new ChatManager(uiManager, config, stateManager);
     const mediaManager = new MediaManager(stateManager, config, uiManager);
     const webRTCManager = new WebRTCManager(stateManager, config, uiManager, null, null);
