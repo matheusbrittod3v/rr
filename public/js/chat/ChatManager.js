@@ -29,7 +29,10 @@ class ChatManager {
         // Send message
         if (this.uiManager.elements.chatForm) {
             this.uiManager.elements.chatForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 this.handleSendMessage(e);
+                return false;
             });
         }
         
@@ -56,7 +59,10 @@ class ChatManager {
     }
     
     async handleSendMessage(e) {
-        e.preventDefault();
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         const message = this.uiManager.elements.messageInput?.value.trim();
         if (!message && !this.selectedFile) return;
         

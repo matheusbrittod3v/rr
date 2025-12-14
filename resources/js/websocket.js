@@ -7,10 +7,10 @@ window.Pusher = Pusher;
 // Initialize Echo with Reverb
 if (typeof Pusher !== 'undefined') {
     // Initialize Echo with Reverb configuration
-    const reverbKey = import.meta.env.VITE_REVERB_APP_KEY;
-    const reverbHost = import.meta.env.VITE_REVERB_HOST;
-    const reverbPort = import.meta.env.VITE_REVERB_PORT ?? 443;
-    const reverbScheme = import.meta.env.VITE_REVERB_SCHEME ?? 'https';
+    const reverbKey = import.meta.env.VITE_REVERB_APP_KEY || '';
+    const reverbHost = import.meta.env.VITE_REVERB_HOST || '';
+    const reverbPort = import.meta.env.VITE_REVERB_PORT || 443;
+    const reverbScheme = import.meta.env.VITE_REVERB_SCHEME || 'https';
     
     if (reverbKey && reverbHost) {
         window.Echo = new Echo({
@@ -18,7 +18,7 @@ if (typeof Pusher !== 'undefined') {
             key: reverbKey,
             wsHost: reverbHost,
             wsPort: reverbScheme === 'https' ? 443 : 80,
-            wssPort: reverbPort,
+            wssPort: parseInt(reverbPort, 10),
             forceTLS: reverbScheme === 'https',
             enabledTransports: ['ws', 'wss'],
         });
