@@ -31,12 +31,22 @@ REVERB_SCHEME=http
 
 # Inicie o servidor
 php artisan reverb:start
+
+# Você deve ver uma mensagem como:
+# [server:info] Server starting on port 8080
+# Reverb server started on 0.0.0.0:8080
+
+# Teste se o servidor está rodando (em outro terminal):
+php test-reverb.php
+# Ou versão simples:
+php test-reverb-simple.php
 ```
 
 ### Deployment no Coolify/Dockploy
 
 1. **Crie uma nova aplicação** no Coolify/Dockploy apontando para esta branch `reverb`
-2. **Configure as variáveis de ambiente:**
+2. **Configure a porta do container:** `8080` (mesma porta configurada em `REVERB_SERVER_PORT`)
+3. **Configure as variáveis de ambiente:**
 
 ```env
 # Configurações básicas do Laravel
