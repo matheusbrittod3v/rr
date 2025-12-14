@@ -56,9 +56,45 @@ REDIS_PASSWORD=senha-redis
 REDIS_PORT=6379
 ```
 
-#### Broadcasting (se usar WebRTC/WebSockets)
+#### Broadcasting com Laravel Reverb (WebSockets Nativo)
+
+O Laravel Reverb já está instalado e configurado. Para usar, configure as seguintes variáveis:
+
 ```
-BROADCAST_DRIVER=pusher
+BROADCAST_CONNECTION=reverb
+
+# Configurações do Reverb Server
+REVERB_APP_ID=seu-app-id
+REVERB_APP_KEY=seu-app-key
+REVERB_APP_SECRET=seu-app-secret
+REVERB_HOST=localhost
+REVERB_PORT=8080
+REVERB_SCHEME=http
+
+# Para produção com HTTPS
+REVERB_SCHEME=https
+REVERB_PORT=443
+
+# Configurações do servidor Reverb (opcional)
+REVERB_SERVER_HOST=0.0.0.0
+REVERB_SERVER_PORT=8080
+REVERB_MAX_REQUEST_SIZE=10000
+
+# Scaling com Redis (opcional, para múltiplos servidores)
+REVERB_SCALING_ENABLED=false
+REVERB_SCALING_CHANNEL=reverb
+```
+
+**Para iniciar o servidor Reverb:**
+```bash
+php artisan reverb:start
+```
+
+**Para produção, o servidor Reverb deve rodar como um processo separado ou via Supervisor/systemd.**
+
+**Alternativa: Pusher (se preferir serviço externo)**
+```
+BROADCAST_CONNECTION=pusher
 PUSHER_APP_ID=seu-app-id
 PUSHER_APP_KEY=seu-app-key
 PUSHER_APP_SECRET=seu-app-secret
