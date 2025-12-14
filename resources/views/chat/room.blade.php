@@ -84,7 +84,7 @@
 
             <!-- Message Input -->
             <div class="bg-white border-t border-gray-200 p-4">
-                <form id="chat-form" class="flex items-end space-x-3">
+                <form id="chat-form" class="flex items-end space-x-3" onsubmit="return false;">
                     @csrf
                     <div class="flex-1">
                         <textarea id="message-input" class="w-full px-4 py-3 text-gray-700 bg-gray-50 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-all" placeholder="Digite sua mensagem..." rows="1" maxlength="1000"></textarea>
@@ -99,7 +99,7 @@
                         <button type="button" id="attach-button" class="p-3 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all hover:scale-105" title="Anexar arquivo">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
                         </button>
-                        <button type="submit" id="send-button" class="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all hover:scale-105 shadow-lg" title="Enviar mensagem">
+                        <button type="button" id="send-button" class="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all hover:scale-105 shadow-lg" title="Enviar mensagem">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
                         </button>
                     </div>
@@ -182,14 +182,20 @@
         elements.charCount.textContent = this.value.length + '/1000';
     });
 
-    // Send message
-    elements.chatForm.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        
+    // Função para enviar mensagem - requisição assíncrona em background
+    async function sendMessage() {
         const message = elements.messageInput.value.trim();
-        if (!message && !state.selectedFile) return;
+        if (!message && !state.selectedFile) {
+            return;
+        }
 
+        // Desabilitar botão de enviar durante o envio
+        const sendButton = elements.sendButton;
+        const originalButtonContent = sendButton.innerHTML;
+        sendButton.disabled = true;
+        sendButton.classList.add('opacity-50', 'cursor-not-allowed');
+        sendButton.innerHTML = '<svg class="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+        
         const formData = new FormData();
         formData.append('message', message);
         formData.append('_token', config.csrfToken);
@@ -198,25 +204,62 @@
         }
 
         try {
+            // Requisição assíncrona em background (não bloqueia a UI)
             const res = await fetch(config.sendMessageUrl, {
                 method: 'POST',
-                body: formData
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
             });
+            
             const data = await res.json();
             if (data.success) {
+                // Limpar formulário apenas se sucesso
                 elements.messageInput.value = '';
                 elements.messageInput.style.height = 'auto';
                 elements.charCount.textContent = '0/1000';
                 state.selectedFile = null;
                 elements.filePreview.classList.add('hidden');
                 elements.fileInput.value = '';
+            } else {
+                console.error('Erro ao enviar mensagem:', data);
+                alert('Erro ao enviar mensagem. Tente novamente.');
             }
         } catch (error) {
             console.error('Error sending message:', error);
-            alert('Erro ao enviar mensagem. Tente novamente.');
+            alert('Erro ao enviar mensagem. Verifique sua conexão e tente novamente.');
+        } finally {
+            // Reabilitar botão
+            sendButton.disabled = false;
+            sendButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            sendButton.innerHTML = originalButtonContent;
         }
-        
+    }
+    
+    // Prevenir submit padrão do formulário
+    elements.chatForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        sendMessage();
         return false;
+    });
+    
+    // Botão de enviar
+    elements.sendButton.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        sendMessage();
+    });
+    
+    // Enter para enviar (Shift+Enter para nova linha)
+    elements.messageInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            sendMessage();
+        }
     });
 
     // File handling
