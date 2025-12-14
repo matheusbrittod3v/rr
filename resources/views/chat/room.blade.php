@@ -154,9 +154,6 @@
     #chat-messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 </style>
 
-{{-- Inicializar Echo via Vite --}}
-@vite(['resources/js/app.js'])
-
 <script>
 // Aguardar Echo estar disponível antes de iniciar
 (function() {

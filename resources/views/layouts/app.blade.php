@@ -11,8 +11,8 @@
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700" rel="stylesheet" />
     
-    <!-- Styles -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Styles - Vite CSS -->
+    @vite(['resources/css/app.css'])
     
     @yield('styles')
 </head>
@@ -20,6 +20,9 @@
     <main>
         @yield('content')
     </main>
+    
+    <!-- Scripts - Vite JS (deve vir antes dos scripts inline) -->
+    @vite(['resources/js/app.js'])
     
     @yield('scripts')
 </body>
