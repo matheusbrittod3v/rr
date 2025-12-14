@@ -300,39 +300,23 @@
     }
 </style>
 
-<!-- Configuração da aplicação (deve ser definida antes dos módulos) -->
-<script>
-    window.CHAT_CONFIG = {
-        roomCode: "{{ $chatRoom->room_code }}",
-        csrfToken: "{{ csrf_token() }}",
-        lastMessageId: {{ $chatRoom->messages->max('id') ?? 0 }},
-        routes: {
-            sendMessageUrl: "{{ route('chat.send-message', $chatRoom->room_code) }}",
-            getMessagesUrl: "{{ route('chat.get-messages', $chatRoom->room_code) }}",
-            signalsUrl: "{{ route('chat.signals', $chatRoom->room_code) }}",
-            sendSignalUrl: "{{ route('chat.signal', $chatRoom->room_code) }}"
-        }
-    };
-</script>
-
-<!-- Importar módulos JavaScript -->
-<script src="{{ asset('js/chat/Config.js') }}"></script>
-<script src="{{ asset('js/chat/Utils.js') }}"></script>
-<script src="{{ asset('js/chat/StateManager.js') }}"></script>
-<script src="{{ asset('js/chat/UIManager.js') }}"></script>
-<script src="{{ asset('js/chat/ChatManager.js') }}"></script>
-<script src="{{ asset('js/chat/MediaManager.js') }}"></script>
-<script src="{{ asset('js/chat/WebRTCManager.js') }}"></script>
-<script src="{{ asset('js/chat/CallManager.js') }}"></script>
-<script src="{{ asset('js/chat/SignalManager.js') }}"></script>
-<script src="{{ asset('js/chat/WebSocketManager.js') }}"></script>
-<script src="{{ asset('js/chat/Main.js') }}"></script>
-
 {{-- Inicializar Echo via Vite --}}
 @vite(['resources/js/app.js'])
-<!-- TODO: Todo o código JavaScript foi migrado para módulos separados -->
-<!-- O código abaixo será removido após verificação -->
-<!--
+
+<script>
+// Aguardar Echo estar disponível antes de iniciar
+(function() {
+    // Aguardar até que window.Echo esteja disponível
+    function waitForEcho(callback) {
+        if (window.Echo) {
+            callback();
+        } else {
+            setTimeout(() => waitForEcho(callback), 100);
+        }
+    }
+    
+    waitForEcho(function() {
+    
     // UI Elements
     const elements = {
         chatForm: document.getElementById('chat-form'),
@@ -2459,6 +2443,7 @@
             cleanPayload = payload;
         }
         
+        // Enviar via fetch (o backend disparará o evento via Reverb)
         fetch(config.sendSignalUrl, {
             method: 'POST',
             headers: {
@@ -2736,175 +2721,86 @@
     elements.voiceCallBtn.addEventListener('click', () => startCall(false));
     elements.videoCallBtn.addEventListener('click', () => startCall(true));
 
-    // ========== POLLING ==========
-
-    // Message polling
-    setInterval(() => {
-        fetch(config.getMessagesUrl)
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && data.messages && data.messages.length > 0) {
-                    const newMsgs = data.messages.filter(m => m.id > state.lastMessageId);
-                    newMsgs.forEach(m => {
-                        addMessageToChat(m);
-                        state.lastMessageId = m.id;
-                    });
-                }
-            })
-            .catch(e => console.error("Message poll error", e));
-    }, 3000);
-
-    // Signal polling - mobile may need more frequent polling
-    const signalPollInterval = isMobile ? 1500 : 2000;
-    setInterval(() => {
-        fetch(`${config.signalsUrl}?last_signal_id=${state.lastSignalId}`, {
-            method: 'GET',
-            cache: 'no-cache',
-            headers: {
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache'
+    // ========== REVERB WEBSOCKET (substitui polling) ==========
+    
+    // Configurar Echo para mensagens e sinais
+    const roomCode = "{{ $chatRoom->room_code }}";
+    const currentUserType = "{{ auth('admin')->check() ? 'admin' : 'client' }}";
+    
+    // Escutar mensagens do chat
+    window.Echo.channel(`chat-room.${roomCode}`)
+        .listen('.chat.message.sent', (event) => {
+            console.log('Nova mensagem recebida via WebSocket:', event);
+            
+            // Evitar mensagens duplicadas
+            if (event.message && event.message.id > state.lastMessageId) {
+                addMessageToChat(event.message);
+                state.lastMessageId = event.message.id;
             }
         })
-            .then(res => {
-                if (!res.ok) {
-                    throw new Error(`HTTP error! status: ${res.status}`);
-                }
-                return res.json();
-            })
-            .then(data => {
-                if (data.success && data.signals && data.signals.length > 0) {
-                    data.signals.forEach(signal => {
-                        // Skip if already processed
-                        if (state.processedSignalIds.has(signal.id)) {
-                            state.lastSignalId = Math.max(state.lastSignalId, signal.id);
+        .listen('.call.signal', (event) => {
+            console.log('Sinal WebRTC recebido via WebSocket:', event);
+            
+            if (!event.data) {
+                console.error('Sinal sem dados:', event);
+                return;
+            }
+            
+            const signalData = event.data;
+            
+            // Evitar processar sinais enviados por nós mesmos
+            if (signalData.sender_type === currentUserType) {
+                console.log('Ignorando sinal enviado por nós mesmos');
+                return;
+            }
+            
+            // Processar sinal baseado no tipo
+            switch(signalData.type) {
+                case 'offer':
+                    // Clean SDP antes de processar
+                    if (signalData.payload && signalData.payload.sdp) {
+                        const cleanedSDP = cleanSDP(signalData.payload.sdp);
+                        if (!cleanedSDP) {
+                            console.error('Invalid SDP in offer');
                             return;
                         }
-                        
-                        state.lastSignalId = Math.max(state.lastSignalId, signal.id);
-                        
-                        // Mark as processed immediately to avoid duplicates
-                        state.processedSignalIds.add(signal.id);
-                        
-                        // Clean old processed IDs (keep only last 100)
-                        if (state.processedSignalIds.size > 100) {
-                            const idsArray = Array.from(state.processedSignalIds);
-                            const toRemove = idsArray.slice(0, idsArray.length - 100);
-                            toRemove.forEach(id => state.processedSignalIds.delete(id));
+                        signalData.payload.sdp = cleanedSDP;
+                    }
+                    handleIncomingOffer(signalData.payload, signalData.signal_id || null);
+                    break;
+                case 'answer':
+                    // Clean SDP antes de processar
+                    if (signalData.payload && signalData.payload.sdp) {
+                        const cleanedSDP = cleanSDP(signalData.payload.sdp);
+                        if (!cleanedSDP) {
+                            console.error('Invalid SDP in answer');
+                            return;
                         }
-                        
-                        try {
-                            let payload = JSON.parse(signal.payload);
-                            
-                            // Clean and validate SDP payloads
-                            if ((signal.type === 'offer' || signal.type === 'answer') && payload) {
-                                // Ensure we have a valid SDP object
-                                if (typeof payload === 'object' && payload.type && payload.sdp) {
-                                    // Clean SDP string
-                                    const cleanedSDP = cleanSDP(payload.sdp);
-                                    if (!cleanedSDP) {
-                                        console.error('Invalid SDP: could not clean sdp field', signal.id);
-                                        return;
-                                    }
-                                    
-                                    payload = {
-                                        type: payload.type,
-                                        sdp: cleanedSDP
-                                    };
-                                    
-                                    // Validate SDP format
-                                    if (!payload.sdp || payload.sdp.length === 0) {
-                                        console.error('Invalid SDP: empty sdp field', signal.id);
-                                        return;
-                                    }
-                                    
-                                    if (!['offer', 'answer'].includes(payload.type)) {
-                                        console.error('Invalid SDP type:', payload.type, signal.id);
-                                        return;
-                                    }
-                                } else {
-                                    console.error('Invalid SDP payload structure:', payload, signal.id);
-                                    return;
-                                }
-                            }
-                            
-                            // Ignore conflicting offers during active call, but allow answers (needed to complete connection)
-                            if (state.inCall && signal.type === 'offer') {
-                                console.warn('Ignored conflicting offer during active call:', signal.id);
-                                return;
-                            }
-                            
-                            // Allow answers even if inCall is true (they're needed to complete the connection)
-                            // But check if we already have a peer connection
-                            if (state.inCall && signal.type === 'answer' && !state.peerConnection) {
-                                console.warn('Ignored answer: no peer connection yet');
-                                return;
-                            }
-                            
-                            // Ignore new offers if we're already accepting one
-                            if (state.isAcceptingCall && signal.type === 'offer') {
-                                console.warn('Ignored offer: already accepting call');
-                                return;
-                            }
-                            
-                            // Ignore new offers if modal is already open
-                            if (!elements.incomingCallModal.classList.contains('hidden') && signal.type === 'offer') {
-                                console.warn('Ignored offer: modal already open');
-                                return;
-                            }
-                            
-                            // Ignore duplicate answers if we already have a remote description
-                            if (signal.type === 'answer' && state.peerConnection && state.peerConnection.remoteDescription) {
-                                // Check if this is a duplicate answer
-                                const currentRemoteSDP = state.peerConnection.remoteDescription.sdp;
-                                const incomingSDP = payload?.sdp;
-                                
-                                if (incomingSDP && currentRemoteSDP && 
-                                    (currentRemoteSDP.substring(0, 100) === incomingSDP.substring(0, 100) ||
-                                     state.peerConnection.signalingState === 'stable')) {
-                                    console.log('Ignoring duplicate answer signal:', signal.id);
-                                    return;
-                                }
-                            }
-
-                            switch(signal.type) {
-                                case 'offer':
-                                    handleIncomingOffer(payload, signal.id);
-                                    break;
-                                case 'answer':
-                                    handleIncomingAnswer(payload);
-                                    break;
-                                case 'candidate':
-                                    // Only process candidates if we have a peer connection
-                                    if (state.peerConnection) {
-                                        handleIncomingCandidate(payload);
-                                    }
-                                    break;
-                                case 'hangup':
-                                case 'reject':
-                                    endCall(false);
-                                    if (signal.type === 'reject') {
-                                        alert('Chamada recusada.');
-                                    }
-                                    break;
-                            }
-                        } catch (parseError) {
-                            console.error('Error parsing signal payload:', parseError, signal);
-                        }
-                    });
-                }
-            })
-            .catch(e => {
-                // Mobile may have more network issues, log but don't spam
-                if (!e.message || !e.message.includes('Failed to fetch')) {
-                    console.error("Signal poll error", e);
-                }
-            });
-    }, signalPollInterval);
+                        signalData.payload.sdp = cleanedSDP;
+                    }
+                    handleIncomingAnswer(signalData.payload);
+                    break;
+                case 'candidate':
+                    // Only process candidates if we have a peer connection
+                    if (state.peerConnection) {
+                        handleIncomingCandidate(signalData.payload);
+                    }
+                    break;
+                case 'hangup':
+                case 'reject':
+                    endCall(false);
+                    if (signalData.type === 'reject') {
+                        alert('Chamada recusada.');
+                    }
+                    break;
+            }
+        });
+    
+    console.log('WebSocket Reverb configurado para chat e chamadas');
 
     // Initial scroll
     scrollToBottom();
-});
--->
-<!-- Código JavaScript antigo comentado - agora está nos módulos JS -->
+    }); // Fecha waitForEcho
+})(); // Fecha função anônima auto-executável
 </script>
 @endsection
