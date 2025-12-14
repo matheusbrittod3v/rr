@@ -16,6 +16,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'verify.mercadopago' => VerifyMercadoPagoNotification::class,
         ]);
+        
+        // Trust proxies para funcionar atrás de Nginx/Cloudflare/etc
+        $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
