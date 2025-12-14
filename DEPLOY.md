@@ -23,6 +23,7 @@ APP_URL=https://seu-dominio.com
 ```
 
 #### Database
+**Para MySQL/MariaDB:**
 ```
 DB_CONNECTION=mysql
 DB_HOST=seu-host-db
@@ -31,6 +32,18 @@ DB_DATABASE=nome-do-banco
 DB_USERNAME=usuario-db
 DB_PASSWORD=senha-db
 ```
+
+**Para PostgreSQL:**
+```
+DB_CONNECTION=pgsql
+DB_HOST=seu-host-db
+DB_PORT=5432
+DB_DATABASE=nome-do-banco
+DB_USERNAME=usuario-db
+DB_PASSWORD=senha-db
+```
+
+**⚠️ IMPORTANTE:** Certifique-se de que a variável `DB_CONNECTION` está configurada corretamente (mysql ou pgsql). O driver correspondente será usado automaticamente.
 
 #### Cache/Session
 ```
@@ -110,7 +123,7 @@ php artisan storage:link
 
 ### 6. Extensões PHP
 
-As extensões PHP necessárias estão definidas no `composer.json`:
+As extensões PHP necessárias estão definidas no `.nixpacks.toml`:
 
 - bcmath
 - ctype
@@ -121,9 +134,12 @@ As extensões PHP necessárias estão definidas no `composer.json`:
 - mbstring
 - opcache
 - pdo
-- pdo_mysql
+- pdo_mysql (para MySQL/MariaDB)
+- pdo_pgsql (para PostgreSQL)
 - redis
 - zip
+
+**Nota:** Ambas as extensões de banco (pdo_mysql e pdo_pgsql) estão instaladas para suportar MySQL e PostgreSQL. A extensão usada dependerá da variável `DB_CONNECTION` configurada.
 
 ### 7. Verificação Pós-Deploy
 
@@ -144,13 +160,20 @@ Após o deploy, verifique:
 - Verifique os logs: `php artisan log:clear` (se necessário)
 - Verifique permissões de storage: `chmod -R 775 storage bootstrap/cache`
 
+**Erro: "could not find driver" (PostgreSQL)**
+- Se estiver usando PostgreSQL, a extensão `pdo_pgsql` já está configurada no `.nixpacks.toml`
+- Certifique-se de que `DB_CONNECTION=pgsql` está configurado corretamente
+- Se estiver usando MySQL, certifique-se de que `DB_CONNECTION=mysql` está configurado
+
 **Assets não carregam**
 - Verifique se `npm run build` foi executado
 - Verifique se `/public/build` existe e tem os arquivos
 
 **Banco de dados não conecta**
 - Verifique variáveis `DB_*`
+- Verifique se a variável `DB_CONNECTION` está correta (mysql ou pgsql)
 - Verifique se o serviço de banco está acessível da aplicação
+- Verifique se a extensão correta está instalada (pdo_mysql para MySQL, pdo_pgsql para PostgreSQL)
 
 **Redis não conecta**
 - Verifique variáveis `REDIS_*`

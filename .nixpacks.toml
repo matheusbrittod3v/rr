@@ -17,6 +17,7 @@ phpExtensions = [
   "opcache",
   "pdo",
   "pdo_mysql",
+  "pdo_pgsql",
   "redis",
   "zip"
 ]
