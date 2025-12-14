@@ -1,9 +1,24 @@
 [phases.setup]
 nixPkgs = [
-  "php82",
-  "php82Packages.composer",
+  "php83",
+  "php83Packages.composer",
   "nodejs_20",
   "nginx"
+]
+
+phpExtensions = [
+  "bcmath",
+  "ctype",
+  "curl",
+  "gd",
+  "iconv",
+  "intl",
+  "mbstring",
+  "opcache",
+  "pdo",
+  "pdo_mysql",
+  "redis",
+  "zip"
 ]
 
 [phases.install]
