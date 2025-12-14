@@ -6,28 +6,54 @@ window.Pusher = Pusher;
 
 // Initialize Echo with Reverb
 if (typeof Pusher !== 'undefined') {
-    // Initialize Echo with Reverb configuration
+    // Initialize Echo with Reverb configuration usando variáveis do .env
     const reverbKey = import.meta.env.VITE_REVERB_APP_KEY || '';
     const reverbHost = import.meta.env.VITE_REVERB_HOST || '';
-    const reverbPort = import.meta.env.VITE_REVERB_PORT || 443;
-    const reverbScheme = import.meta.env.VITE_REVERB_SCHEME || 'https';
+    const reverbPort = import.meta.env.VITE_REVERB_PORT || '445';
+    const reverbScheme = import.meta.env.VITE_REVERB_SCHEME || 'http';
+    
+    console.log('[DEBUG] Configurando Reverb com credenciais:', {
+        key: reverbKey ? reverbKey.substring(0, 10) + '...' : 'não configurado',
+        host: reverbHost,
+        port: reverbPort,
+        scheme: reverbScheme
+    });
     
     if (reverbKey && reverbHost) {
+        const port = parseInt(reverbPort, 10) || 445;
+        const useTLS = reverbScheme === 'https';
+        
+        // Configuração do Echo com Reverb
         window.Echo = new Echo({
             broadcaster: 'reverb',
             key: reverbKey,
             wsHost: reverbHost,
-            wsPort: reverbScheme === 'https' ? 443 : 80,
-            wssPort: parseInt(reverbPort, 10),
-            forceTLS: reverbScheme === 'https',
+            wsPort: port, // Porta para WebSocket (ws://)
+            wssPort: port, // Porta para WebSocket Secure (wss://)
+            forceTLS: useTLS,
             enabledTransports: ['ws', 'wss'],
         });
 
-        console.log('WebSocket connection initialized with Reverb');
+        console.log('[DEBUG] ✅ Echo inicializado com Reverb:', {
+            broadcaster: 'reverb',
+            key: reverbKey.substring(0, 10) + '...',
+            wsHost: reverbHost,
+            wsPort: port,
+            wssPort: port,
+            forceTLS: useTLS,
+            scheme: reverbScheme,
+            enabledTransports: ['ws', 'wss']
+        });
+        console.log('[DEBUG] Conexão WebSocket configurada e pronta para:', reverbHost + ':' + port);
     } else {
+        console.error('[DEBUG] ❌ Credenciais Reverb não configuradas:', {
+            hasKey: !!reverbKey,
+            hasHost: !!reverbHost
+        });
         console.warn('Reverb credentials not configured. WebSocket connection not initialized.');
     }
 } else {
+    console.error('[DEBUG] ❌ Pusher não disponível');
     console.warn('Pusher not available, WebSocket connection not initialized');
 }
 

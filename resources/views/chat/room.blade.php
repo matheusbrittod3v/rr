@@ -99,8 +99,8 @@
                         <button type="button" id="attach-button" class="p-3 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all hover:scale-105" title="Anexar arquivo">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
                         </button>
-                        <button type="button" id="send-button" class="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all hover:scale-105 shadow-lg" title="Enviar mensagem">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                        <button type="button" id="send-button" class="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all hover:scale-105 shadow-lg active:scale-95 transform duration-150" title="Enviar mensagem">
+                            <svg id="send-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
                         </button>
                     </div>
                 </form>
@@ -125,6 +125,30 @@
     .animate-fade-in {
         animation: fade-in 0.3s ease-out;
     }
+    
+    @keyframes button-press {
+        0% { transform: scale(1); }
+        50% { transform: scale(0.95); }
+        100% { transform: scale(1); }
+    }
+    
+    @keyframes icon-bounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-5px); }
+    }
+    
+    #send-button:active {
+        animation: button-press 0.2s ease-out;
+    }
+    
+    #send-icon {
+        transition: transform 0.2s ease-out;
+    }
+    
+    #send-button:hover #send-icon {
+        transform: translateY(-2px) scale(1.1);
+    }
+    
     #chat-messages::-webkit-scrollbar { width: 6px; }
     #chat-messages::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
     #chat-messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -162,6 +186,7 @@
         fileInput: document.getElementById('file-input'),
         attachButton: document.getElementById('attach-button'),
         sendButton: document.getElementById('send-button'),
+        sendIcon: document.getElementById('send-icon'),
         chatMessages: document.getElementById('chat-messages'),
         filePreview: document.getElementById('file-preview'),
         fileName: document.getElementById('file-name'),
@@ -255,13 +280,18 @@
             hasFile: formData.has('file')
         });
 
-        // Desabilitar botão de enviar durante o envio
+        // Desabilitar botão de enviar durante o envio com animação
         const sendButton = elements.sendButton;
-        const originalButtonContent = sendButton.innerHTML;
+        const sendIcon = elements.sendIcon;
+        const originalIconHTML = sendIcon ? sendIcon.outerHTML : '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>';
+        
         sendButton.disabled = true;
-        sendButton.classList.add('opacity-50', 'cursor-not-allowed');
-        sendButton.innerHTML = '<svg class="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
-        console.log('[DEBUG] Botão de enviar desabilitado');
+        sendButton.classList.add('opacity-50', 'cursor-not-allowed', 'animate-pulse');
+        if (sendIcon) {
+            sendIcon.style.display = 'none';
+        }
+        sendButton.innerHTML = '<svg class="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+        console.log('[DEBUG] Botão de enviar desabilitado com animação de loading');
 
         try {
             console.log('[DEBUG] Enviando requisição HTTP...');
@@ -315,11 +345,24 @@
             console.error('[DEBUG] Stack trace:', error.stack);
             alert('Erro ao enviar mensagem. Verifique sua conexão e tente novamente.');
         } finally {
-            // Reabilitar botão
+            // Reabilitar botão com animação suave
             console.log('[DEBUG] Reabilitando botão de enviar...');
             sendButton.disabled = false;
-            sendButton.classList.remove('opacity-50', 'cursor-not-allowed');
-            sendButton.innerHTML = originalButtonContent;
+            sendButton.classList.remove('opacity-50', 'cursor-not-allowed', 'animate-pulse');
+            
+            // Restaurar ícone original com animação
+            sendButton.innerHTML = originalIconHTML;
+            const restoredIcon = document.getElementById('send-icon');
+            if (restoredIcon) {
+                restoredIcon.classList.add('animate-ping');
+                setTimeout(() => {
+                    restoredIcon.classList.remove('animate-ping');
+                }, 500);
+            }
+            
+            // Atualizar referência do ícone
+            elements.sendIcon = document.getElementById('send-icon');
+            
             console.log('[DEBUG] ========================================');
             console.log('[DEBUG] PROCESSO DE ENVIO FINALIZADO');
             console.log('[DEBUG] ========================================');
@@ -335,10 +378,21 @@
         return false;
     });
     
-    // Botão de enviar
+    // Botão de enviar com animação
     elements.sendButton.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
+        
+        // Animação de clique
+        console.log('[DEBUG] Animação de clique no botão enviar');
+        elements.sendButton.classList.add('animate-pulse');
+        elements.sendIcon.classList.add('animate-bounce');
+        
+        setTimeout(() => {
+            elements.sendButton.classList.remove('animate-pulse');
+            elements.sendIcon.classList.remove('animate-bounce');
+        }, 300);
+        
         sendMessage();
     });
     
@@ -347,6 +401,17 @@
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             e.stopPropagation();
+            
+            // Animação visual ao pressionar Enter
+            console.log('[DEBUG] Enter pressionado, animando botão...');
+            elements.sendButton.classList.add('animate-pulse', 'ring-2', 'ring-blue-300');
+            elements.sendIcon.classList.add('animate-bounce');
+            
+            setTimeout(() => {
+                elements.sendButton.classList.remove('animate-pulse', 'ring-2', 'ring-blue-300');
+                elements.sendIcon.classList.remove('animate-bounce');
+            }, 300);
+            
             sendMessage();
         }
     });
@@ -495,7 +560,12 @@
         roomCode: roomCode,
         channelName: channelName,
         echoAvailable: !!window.Echo,
-        echoType: typeof window.Echo
+        echoType: typeof window.Echo,
+        reverbConfig: window.Echo ? {
+            wsHost: window.Echo.connector?.options?.wsHost || 'não configurado',
+            wsPort: window.Echo.connector?.options?.wsPort || 'não configurado',
+            broadcaster: window.Echo.connector?.options?.broadcaster || 'não configurado'
+        } : 'Echo não disponível'
     });
     
     try {
