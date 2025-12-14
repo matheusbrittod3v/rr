@@ -1,0 +1,17 @@
+[phases.setup]
+nixPkgs = [
+  "php83",
+  "php83Packages.composer",
+  "nodejs_20",
+  "nginx"
+]
+
+[phases.build]
+cmds = [
+  "composer install --no-dev --optimize-autoloader",
+  "npm ci",
+  "npm run build"
+]
+
+[start]
+cmd = "php-fpm & nginx -g 'daemon off;'"
