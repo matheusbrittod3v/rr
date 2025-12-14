@@ -40,4 +40,4 @@ cmds = [
 cmd = "{nginx_start_serving_cmd}"
 
 [variables]
-NIXPACKS_PHP_ROOT_DIR = "/app/public"
+NIXPACKS_PHP_ROOT_DIR = "/app/public" 
