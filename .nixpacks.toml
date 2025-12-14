@@ -1,39 +1,43 @@
 [phases.setup]
 nixPkgs = [
   "php83",
-  "php83Packages.composer"
+  "php83Packages.composer",
+  "nodejs_20",
+  "nginx"
 ]
 
-# Apenas extensões essenciais para o Reverb
 phpExtensions = [
   "bcmath",
   "ctype",
   "curl",
+  "gd",
   "iconv",
+  "intl",
   "mbstring",
   "opcache",
   "pdo",
   "pdo_mysql",
+  "pdo_pgsql",
   "redis",
   "zip"
 ]
 
 [phases.install]
-# Instala apenas dependências PHP, sem npm
 cmds = [
-  "composer install --no-dev --optimize-autoloader --no-interaction"
+  "composer install --no-dev --optimize-autoloader --no-interaction",
+  "npm ci --omit=dev"
 ]
 
 [phases.build]
-# Apenas cache de configuração Laravel (necessário para o Reverb funcionar)
-# IMPORTANTE: Configure APP_KEY nas variáveis de ambiente antes do deploy
 cmds = [
-  "php artisan config:cache || true"
+  "php artisan config:cache",
+  "php artisan route:cache",
+  "php artisan view:cache",
+  "npm run build"
 ]
 
 [start]
-# Inicia apenas o servidor Reverb
-cmd = "php artisan reverb:start"
+cmd = "{nginx_start_serving_cmd}"
 
 [variables]
-# Não precisa de NIXPACKS_PHP_ROOT_DIR pois não há servidor web
+NIXPACKS_PHP_ROOT_DIR = "/app/public" 
