@@ -77,12 +77,6 @@ Route::prefix('chat')->group(function () {
     Route::get('/{roomCode}', [ChatController::class, 'showLogin'])->name('chat.login');
     Route::post('/{roomCode}/authenticate', [ChatController::class, 'authenticate'])->name('chat.authenticate');
     Route::get('/{roomCode}/room', [ChatController::class, 'showRoom'])->name('chat.room');
-    Route::post('/{roomCode}/send-message', [ChatController::class, 'sendMessage'])->name('chat.send-message');
-    Route::get('/{roomCode}/messages', [ChatController::class, 'getMessages'])->name('chat.get-messages');
-
-    // WebRTC Signaling (AJAX Polling)
-    Route::post('/{roomCode}/signal', [ChatController::class, 'sendSignal'])->name('chat.signal');
-    Route::get('/{roomCode}/signals', [ChatController::class, 'fetchSignals'])->name('chat.signals');
 });
 
 // WhatsApp QR Code endpoint (única instância - uso interno)
