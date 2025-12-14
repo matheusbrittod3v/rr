@@ -7,9 +7,14 @@ window.Pusher = Pusher;
 // Initialize Echo with Reverb
 if (typeof Pusher !== 'undefined') {
     // Initialize Echo with Reverb configuration usando variáveis do .env
-    const reverbKey = import.meta.env.VITE_REVERB_APP_KEY || '';
-    const reverbHost = import.meta.env.VITE_REVERB_HOST || '';
-    const reverbPort = import.meta.env.VITE_REVERB_PORT || '445';
+    // Mesmas credenciais do test-reverb.php que funcionam:
+    // REVERB_APP_KEY='sdfghjkhgfdfghjkhgfghjk'
+    // REVERB_HOST='aplication-pdr-laravel-aplication-dqvnri-fc8b57-31-97-14-4.traefik.me'
+    // REVERB_PORT=443
+    // REVERB_SCHEME=http
+    const reverbKey = import.meta.env.VITE_REVERB_APP_KEY || 'sdfghjkhgfdfghjkhgfghjk';
+    const reverbHost = import.meta.env.VITE_REVERB_HOST || 'aplication-pdr-laravel-aplication-dqvnri-fc8b57-31-97-14-4.traefik.me';
+    const reverbPort = import.meta.env.VITE_REVERB_PORT || '443';
     const reverbScheme = import.meta.env.VITE_REVERB_SCHEME || 'http';
     
     console.log('[DEBUG] Configurando Reverb com credenciais:', {

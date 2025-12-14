@@ -9,7 +9,7 @@ $REVERB_APP_KEY    = 'sdfghjkhgfdfghjkhgfghjk';
 $REVERB_APP_SECRET = 'dfghjkrtyuijhgfghjklkjhgfghjkjhgh';
 $REVERB_HOST       = 'aplication-pdr-laravel-aplication-dqvnri-fc8b57-31-97-14-4.traefik.me';
 $REVERB_PORT       = 443;
-$REVERB_SCHEME     = 'https'; // http ou https
+$REVERB_SCHEME     = 'http'; // http ou https
 
 $endpoint = "{$REVERB_SCHEME}://{$REVERB_HOST}:{$REVERB_PORT}/apps/{$REVERB_APP_ID}/events";
 

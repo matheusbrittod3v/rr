@@ -161,19 +161,52 @@
 // Aguardar Echo estar disponível antes de iniciar
 (function() {
     console.log('[DEBUG] Iniciando inicialização do chat...');
+    console.log('[DEBUG] Verificando módulos Vite carregados...');
     
-    function waitForEcho(callback) {
-        console.log('[DEBUG] Verificando se Echo está disponível...');
-        if (window.Echo) {
-            console.log('[DEBUG] ✅ Echo encontrado!', window.Echo);
-            callback();
+    // Aguardar o DOM estar pronto
+    function waitForDOM(callback) {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', callback);
         } else {
-            console.log('[DEBUG] ⏳ Echo não encontrado, aguardando 100ms...');
-            setTimeout(() => waitForEcho(callback), 100);
+            callback();
         }
     }
     
-    waitForEcho(function() {
+    // Aguardar Echo estar disponível
+    function waitForEcho(callback, maxAttempts = 50) {
+        let attempts = 0;
+        
+        function checkEcho() {
+            attempts++;
+            console.log(`[DEBUG] Tentativa ${attempts}/${maxAttempts}: Verificando se Echo está disponível...`);
+            console.log('[DEBUG] window.Echo:', window.Echo);
+            console.log('[DEBUG] typeof window.Echo:', typeof window.Echo);
+            console.log('[DEBUG] window.Pusher:', window.Pusher);
+            
+            if (window.Echo && typeof window.Echo.channel === 'function') {
+                console.log('[DEBUG] ✅ Echo encontrado e funcional!', window.Echo);
+                callback();
+            } else if (attempts >= maxAttempts) {
+                console.error('[DEBUG] ❌ Timeout: Echo não foi carregado após', maxAttempts * 100, 'ms');
+                console.error('[DEBUG] Verifique se o websocket.js está sendo importado corretamente em app.js');
+                console.error('[DEBUG] Verifique se as dependências (laravel-echo, pusher-js) estão instaladas');
+                // Mesmo assim tentar continuar se algum Echo estiver disponível
+                if (window.Echo) {
+                    console.warn('[DEBUG] ⚠️ Tentando usar Echo parcialmente disponível...');
+                    callback();
+                }
+            } else {
+                setTimeout(checkEcho, 100);
+            }
+        }
+        
+        checkEcho();
+    }
+    
+    // Iniciar quando DOM estiver pronto
+    waitForDOM(function() {
+        console.log('[DEBUG] DOM carregado, aguardando Echo...');
+        waitForEcho(function() {
     
     console.log('[DEBUG] ========================================');
     console.log('[DEBUG] INICIALIZANDO CHAT - DEBUG COMPLETO');
@@ -672,7 +705,8 @@
     console.log('[DEBUG] Canal Reverb:', channelName);
     console.log('[DEBUG] ========================================');
     
-    }); // Fecha waitForEcho
+        }); // Fecha waitForEcho
+    }); // Fecha waitForDOM
 })(); // Fecha função anônima auto-executável
 </script>
 @endsection
