@@ -177,15 +177,11 @@ class ChatManager {
         }
     }
     
+    // Polling removido - agora usa WebSocket via WebSocketManager
+    // Mantido apenas para fallback caso WebSocket não esteja disponível
     startPolling() {
-        if (this.pollInterval) {
-            clearInterval(this.pollInterval);
-        }
-        
-        const pollInterval = this.config.messagePollInterval || this.config.routes?.messagePollInterval || 3000;
-        this.pollInterval = setInterval(() => {
-            this.fetchNewMessages();
-        }, pollInterval);
+        // Não fazer nada - usar WebSocket ao invés de polling
+        console.log('Polling de mensagens desabilitado - usando WebSocket');
     }
     
     stopPolling() {
@@ -195,7 +191,8 @@ class ChatManager {
         }
     }
     
-    async fetchNewMessages() {
+    // Método mantido apenas para carregar mensagens iniciais
+    async fetchInitialMessages() {
         try {
             const url = this.config.getMessagesUrl || this.config.routes?.getMessagesUrl;
             if (!url) {
@@ -205,17 +202,20 @@ class ChatManager {
             const res = await fetch(url);
             const data = await res.json();
             if (data.success && data.messages && data.messages.length > 0) {
-                const newMsgs = data.messages.filter(m => m.id > this.lastMessageId);
-                newMsgs.forEach(m => {
-                    this.addMessageToChat(m);
-                    this.lastMessageId = m.id;
+                data.messages.forEach(m => {
+                    // Verificar se já existe no DOM
+                    const existingMessage = document.querySelector(`[data-message-id="${m.id}"]`);
+                    if (!existingMessage) {
+                        this.addMessageToChat(m);
+                    }
+                    this.lastMessageId = Math.max(this.lastMessageId, m.id);
                     if (this.state) {
-                        this.state.lastMessageId = m.id;
+                        this.state.lastMessageId = Math.max(this.state.lastMessageId, m.id);
                     }
                 });
             }
         } catch (e) {
-            console.error("Message poll error", e);
+            console.error("Error fetching initial messages", e);
         }
     }
     

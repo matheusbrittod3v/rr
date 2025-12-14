@@ -325,7 +325,11 @@
 <script src="{{ asset('js/chat/WebRTCManager.js') }}"></script>
 <script src="{{ asset('js/chat/CallManager.js') }}"></script>
 <script src="{{ asset('js/chat/SignalManager.js') }}"></script>
+<script src="{{ asset('js/chat/WebSocketManager.js') }}"></script>
 <script src="{{ asset('js/chat/Main.js') }}"></script>
+
+{{-- Inicializar Echo via Vite --}}
+@vite(['resources/js/app.js'])
 <!-- TODO: Todo o código JavaScript foi migrado para módulos separados -->
 <!-- O código abaixo será removido após verificação -->
 <!--

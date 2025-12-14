@@ -94,11 +94,44 @@ document.addEventListener('DOMContentLoaded', function() {
         uiManager.elements.minimizedCallWidget.addEventListener('click', () => callManager.maximizeCall());
     }
     
-    // Iniciar polling de mensagens
-    chatManager.startPolling();
+    // Carregar mensagens iniciais (apenas uma vez)
+    chatManager.fetchInitialMessages().then(() => {
+        uiManager.scrollToBottom();
+    });
     
-    // Iniciar polling de sinais
-    signalManager.startPolling();
+    // Aguardar Echo estar disponível (carregado via @vite)
+    function initializeWebSocket() {
+        if (!window.Echo) {
+            console.warn('Echo ainda não disponível, tentando novamente...');
+            setTimeout(initializeWebSocket, 500);
+            return;
+        }
+        
+        // Inicializar WebSocket Manager (substitui polling)
+        const webSocketManager = new WebSocketManager(
+            stateManager, 
+            config, 
+            callManager, 
+            webRTCManager, 
+            chatManager, 
+            uiManager
+        );
+        
+        // Tentar inicializar WebSocket
+        const wsInitialized = webSocketManager.initialize();
+        
+        if (!wsInitialized) {
+            console.warn('WebSocket não disponível, usando polling como fallback');
+            // Fallback para polling se WebSocket não estiver disponível
+            chatManager.startPolling();
+            signalManager.startPolling();
+        } else {
+            console.log('✅ WebSocket conectado - polling desabilitado');
+        }
+    }
+    
+    // Inicializar após um pequeno delay para garantir que Echo esteja carregado
+    setTimeout(initializeWebSocket, 100);
     
     // Scroll inicial
     uiManager.scrollToBottom();

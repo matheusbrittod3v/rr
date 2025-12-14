@@ -16,7 +16,7 @@ class ChatMessageSent implements ShouldBroadcast
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public $message;
-    public $roomId;
+    public $roomCode;
     public $userId;
     public $userName;
 
@@ -24,14 +24,14 @@ class ChatMessageSent implements ShouldBroadcast
      * Create a new event instance.
      *
      * @param ChatMessage $message
-     * @param int $roomId
-     * @param int $userId
-     * @param string $userName
+     * @param string $roomCode
+     * @param int|null $userId
+     * @param string|null $userName
      */
-    public function __construct(ChatMessage $message, $roomId, $userId, $userName)
+    public function __construct(ChatMessage $message, $roomCode, $userId = null, $userName = null)
     {
         $this->message = $message;
-        $this->roomId = $roomId;
+        $this->roomCode = $roomCode;
         $this->userId = $userId;
         $this->userName = $userName;
     }
@@ -44,8 +44,7 @@ class ChatMessageSent implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new Channel('chat-room.' . $this->roomId),
-            new PrivateChannel('chat-room.' . $this->roomId),
+            new Channel('chat-room.' . $this->roomCode),
         ];
     }
 
@@ -67,15 +66,12 @@ class ChatMessageSent implements ShouldBroadcast
     public function broadcastWith()
     {
         return [
-            'message_id' => $this->message->id,
-            'room_id' => $this->roomId,
-            'user_id' => $this->userId,
-            'user_name' => $this->userName,
-            'content' => $this->message->message,
-            'sender_type' => $this->message->sender_type, // Include sender type
+            'id' => $this->message->id,
+            'message' => $this->message->message,
+            'sender_type' => $this->message->sender_type,
             'file_path' => $this->message->file_path,
             'file_type' => $this->message->file_type,
-            'timestamp' => $this->message->created_at->toISOString(),
+            'created_at' => $this->message->created_at->toISOString(),
         ];
     }
 }

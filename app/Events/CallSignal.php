@@ -48,4 +48,16 @@ class CallSignal implements ShouldBroadcastNow
     {
         return 'call.signal';
     }
+    
+    /**
+     * Get the data to broadcast.
+     *
+     * @return array<string, mixed>
+     */
+    public function broadcastWith()
+    {
+        return [
+            'data' => $this->data,
+        ];
+    }
 }

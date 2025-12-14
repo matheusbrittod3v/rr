@@ -1,21 +1,32 @@
 import Echo from 'laravel-echo';
+import Pusher from 'pusher-js';
 
-// Check if Pusher is available
+// Make Pusher available globally
+window.Pusher = Pusher;
+
+// Initialize Echo with Reverb
 if (typeof Pusher !== 'undefined') {
-    // Initialize Echo with Soketi configuration
-    window.Echo = new Echo({
-        broadcaster: 'pusher',
-        key: import.meta.env.VITE_SOKETI_APP_KEY || 'fghjhgfdfgh',
-        wsHost: import.meta.env.VITE_SOKETI_HOST || 'data-base-soketi-85305f-31-97-14-4.traefik.me',
-        wsPort: import.meta.env.VITE_SOKETI_PORT || 6001,
-        wssPort: import.meta.env.VITE_SOKETI_PORT || 6001,
-        forceTLS: false,
-        encrypted: false,
-        disableStats: true,
-        enabledTransports: ['ws', 'wss'],
-    });
+    // Initialize Echo with Reverb configuration
+    const reverbKey = import.meta.env.VITE_REVERB_APP_KEY;
+    const reverbHost = import.meta.env.VITE_REVERB_HOST;
+    const reverbPort = import.meta.env.VITE_REVERB_PORT ?? 443;
+    const reverbScheme = import.meta.env.VITE_REVERB_SCHEME ?? 'https';
+    
+    if (reverbKey && reverbHost) {
+        window.Echo = new Echo({
+            broadcaster: 'reverb',
+            key: reverbKey,
+            wsHost: reverbHost,
+            wsPort: reverbScheme === 'https' ? 443 : 80,
+            wssPort: reverbPort,
+            forceTLS: reverbScheme === 'https',
+            enabledTransports: ['ws', 'wss'],
+        });
 
-    console.log('WebSocket connection initialized with Soketi');
+        console.log('WebSocket connection initialized with Reverb');
+    } else {
+        console.warn('Reverb credentials not configured. WebSocket connection not initialized.');
+    }
 } else {
     console.warn('Pusher not available, WebSocket connection not initialized');
 }
