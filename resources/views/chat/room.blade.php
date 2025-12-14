@@ -1,3 +1,7 @@
+@extends('layouts.app')
+
+@section('title', 'Chat - Renttool')
+
 @section('content')
 <div class="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 py-4 sm:py-8">
     <div class="max-w-5xl mx-auto px-4">
@@ -42,14 +46,9 @@
                         <div class="flex {{ $message->sender_type === 'client' ? 'justify-end' : 'justify-start' }}">
                             <div class="max-w-xs sm:max-w-md lg:max-w-lg">
                                 <div class="flex items-end gap-2 {{ $message->sender_type === 'client' ? 'flex-row-reverse' : 'flex-row' }}">
-                                    @if($message->sender_type === 'admin')
-                                        <div class="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-xs text-white" title="Admin">A</div>
-                                    @endif
-
                                     <div class="px-4 py-3 rounded-2xl shadow-sm {{ 
                                         $message->sender_type === 'client' ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-sm' : 
-                                        ($message->sender_type === 'admin' ? 'bg-purple-100 text-purple-900 border border-purple-200 rounded-bl-sm' : 
-                                        'bg-white text-gray-800 border border-gray-200 rounded-bl-sm') 
+                                        'bg-white text-gray-800 border border-gray-200 rounded-bl-sm'
                                     }}">
                                         @if($message->message)
                                             <p class="text-sm break-words">{{ $message->message }}</p>
@@ -72,8 +71,7 @@
                                             @endif
                                         @endif
                                         
-                                        <p class="text-xs mt-1.5 {{ $message->sender_type === 'client' ? 'text-blue-100' : ($message->sender_type === 'admin' ? 'text-purple-400' : 'text-gray-500') }}">
-                                            @if($message->sender_type === 'admin') <strong>Admin</strong> • @endif
+                                        <p class="text-xs mt-1.5 {{ $message->sender_type === 'client' ? 'text-blue-100' : 'text-gray-500' }}">
                                             {{ $message->created_at->format('H:i') }}
                                         </p>
                                     </div>
@@ -253,7 +251,6 @@
         messageDiv.setAttribute('data-message-id', message.id);
         
         const isClient = message.sender_type === 'client';
-        const isAdmin = message.sender_type === 'admin';
         
         let fileHtml = '';
         if (message.file_path) {
@@ -277,16 +274,13 @@
             <div class="flex ${isClient ? 'justify-end' : 'justify-start'}">
                 <div class="max-w-xs sm:max-w-md lg:max-w-lg">
                     <div class="flex items-end gap-2 ${isClient ? 'flex-row-reverse' : 'flex-row'}">
-                        ${isAdmin ? '<div class="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-xs text-white" title="Admin">A</div>' : ''}
                         <div class="px-4 py-3 rounded-2xl shadow-sm ${
                             isClient ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-sm' : 
-                            (isAdmin ? 'bg-purple-100 text-purple-900 border border-purple-200 rounded-bl-sm' : 
-                            'bg-white text-gray-800 border border-gray-200 rounded-bl-sm')
+                            'bg-white text-gray-800 border border-gray-200 rounded-bl-sm'
                         }">
                             ${message.message ? `<p class="text-sm break-words">${message.message}</p>` : ''}
                             ${fileHtml}
-                            <p class="text-xs mt-1.5 ${isClient ? 'text-blue-100' : (isAdmin ? 'text-purple-400' : 'text-gray-500')}">
-                                ${isAdmin ? '<strong>Admin</strong> • ' : ''}
+                            <p class="text-xs mt-1.5 ${isClient ? 'text-blue-100' : 'text-gray-500'}">
                                 ${timeString}
                             </p>
                         </div>

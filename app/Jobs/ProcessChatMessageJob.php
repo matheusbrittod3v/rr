@@ -61,7 +61,7 @@ class ProcessChatMessageJob implements ShouldQueue
                 $chatMessage,
                 $chatRoom->room_code,
                 $this->senderId,
-                $this->senderType === 'admin' ? 'Admin' : ($this->senderType === 'provider' ? 'Prestador' : 'Cliente')
+                $this->senderType === 'provider' ? 'Prestador' : 'Cliente'
             ));
         }
     }
