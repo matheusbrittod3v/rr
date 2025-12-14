@@ -26,8 +26,9 @@ cmds = [
 
 [phases.build]
 # Apenas cache de configuração Laravel (necessário para o Reverb funcionar)
+# IMPORTANTE: Configure APP_KEY nas variáveis de ambiente antes do deploy
 cmds = [
-  "php artisan config:cache"
+  "php artisan config:cache || true"
 ]
 
 [start]
