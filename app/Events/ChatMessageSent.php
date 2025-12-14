@@ -66,12 +66,14 @@ class ChatMessageSent implements ShouldBroadcast
     public function broadcastWith()
     {
         return [
-            'id' => $this->message->id,
-            'message' => $this->message->message,
-            'sender_type' => $this->message->sender_type,
-            'file_path' => $this->message->file_path,
-            'file_type' => $this->message->file_type,
-            'created_at' => $this->message->created_at->toISOString(),
+            'message' => [
+                'id' => $this->message->id,
+                'message' => $this->message->message,
+                'sender_type' => $this->message->sender_type,
+                'file_path' => $this->message->file_path,
+                'file_type' => $this->message->file_type,
+                'created_at' => $this->message->created_at->toISOString(),
+            ]
         ];
     }
 }
