@@ -113,6 +113,12 @@ class CallManager {
                 return;
             }
             
+            // Check if modal is already open
+            if (this.ui.elements.incomingCallModal && !this.ui.elements.incomingCallModal.classList.contains('hidden')) {
+                console.log('Ignoring offer: modal already open');
+                return;
+            }
+            
             if (this.pendingOffer) {
                 console.log('Ignoring offer: already have pending offer');
                 return;
@@ -462,6 +468,11 @@ class CallManager {
             this.state.peerConnection = null;
         }
         
+        if (this.state.remoteStream) {
+            this.state.remoteStream.getTracks().forEach(track => track.stop());
+            this.state.remoteStream = null;
+        }
+        
         this.pendingOffer = null;
         this.pendingOfferSignalId = null;
         this.state.pendingCandidates = [];
@@ -523,6 +534,8 @@ class CallManager {
         }
         
         this.state.callStartTime = Date.now();
+        this.ui.showCallTimer();
+        
         this.state.callTimerInterval = setInterval(() => {
             if (!this.state.callStartTime) return;
             
@@ -531,9 +544,7 @@ class CallManager {
             const seconds = elapsed % 60;
             const timeString = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
             
-            if (this.ui.elements.timerDisplay) {
-                this.ui.elements.timerDisplay.textContent = timeString;
-            }
+            this.ui.updateTimerDisplay(timeString);
         }, 1000);
     }
     
@@ -543,9 +554,8 @@ class CallManager {
             this.state.callTimerInterval = null;
         }
         this.state.callStartTime = null;
-        if (this.ui.elements.timerDisplay) {
-            this.ui.elements.timerDisplay.textContent = '00:00';
-        }
+        this.ui.hideCallTimer();
+        this.ui.updateTimerDisplay('00:00');
     }
     
     toggleMic() {

@@ -62,13 +62,18 @@ class ChatManager {
         
         const formData = new FormData();
         formData.append('message', message || '');
-        formData.append('_token', this.config.csrfToken || this.config.routes?.csrfToken);
+        formData.append('_token', this.config.csrfToken);
         if (this.selectedFile) {
             formData.append('file', this.selectedFile);
         }
         
         try {
-            const res = await fetch(this.config.sendMessageUrl, {
+            const url = this.config.sendMessageUrl || this.config.routes?.sendMessageUrl;
+            if (!url) {
+                console.error('sendMessageUrl não encontrada na configuração');
+                return;
+            }
+            const res = await fetch(url, {
                 method: 'POST',
                 body: formData
             });
@@ -177,9 +182,10 @@ class ChatManager {
             clearInterval(this.pollInterval);
         }
         
+        const pollInterval = this.config.messagePollInterval || this.config.routes?.messagePollInterval || 3000;
         this.pollInterval = setInterval(() => {
             this.fetchNewMessages();
-        }, this.config.messagePollInterval);
+        }, pollInterval);
     }
     
     stopPolling() {
@@ -191,7 +197,12 @@ class ChatManager {
     
     async fetchNewMessages() {
         try {
-            const res = await fetch(this.config.getMessagesUrl);
+            const url = this.config.getMessagesUrl || this.config.routes?.getMessagesUrl;
+            if (!url) {
+                console.error('getMessagesUrl não encontrada na configuração');
+                return;
+            }
+            const res = await fetch(url);
             const data = await res.json();
             if (data.success && data.messages && data.messages.length > 0) {
                 const newMsgs = data.messages.filter(m => m.id > this.lastMessageId);

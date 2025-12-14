@@ -300,6 +300,21 @@
     }
 </style>
 
+<!-- Configuração da aplicação (deve ser definida antes dos módulos) -->
+<script>
+    window.CHAT_CONFIG = {
+        roomCode: "{{ $chatRoom->room_code }}",
+        csrfToken: "{{ csrf_token() }}",
+        lastMessageId: {{ $chatRoom->messages->max('id') ?? 0 }},
+        routes: {
+            sendMessageUrl: "{{ route('chat.send-message', $chatRoom->room_code) }}",
+            getMessagesUrl: "{{ route('chat.get-messages', $chatRoom->room_code) }}",
+            signalsUrl: "{{ route('chat.signals', $chatRoom->room_code) }}",
+            sendSignalUrl: "{{ route('chat.signal', $chatRoom->room_code) }}"
+        }
+    };
+</script>
+
 <!-- Importar módulos JavaScript -->
 <script src="{{ asset('js/chat/Config.js') }}"></script>
 <script src="{{ asset('js/chat/Utils.js') }}"></script>
