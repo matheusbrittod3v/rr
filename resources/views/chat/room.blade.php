@@ -166,23 +166,9 @@
         'senderType' => session('chat_user_role', 'client'),
     ];
     
-    // Debug: verificar sessão
-    \Log::info('Carregando página do chat', [
-        'roomCode' => $chatRoom->room_code,
-        'senderType' => session('chat_user_role', 'client'),
-        'authenticatedRoom' => session('authenticated_chat_room'),
-        'sessionId' => session()->getId(),
-    ]);
 @endphp
 
 const CHAT_CONFIG = @json($chatConfig);
-
-// Debug no console
-console.log('[Chat] Configuração:', CHAT_CONFIG);
-console.log('[Chat] Sessão no servidor:', {
-    senderType: @json(session('chat_user_role', 'client')),
-    authenticatedRoom: @json(session('authenticated_chat_room')),
-});
 
 // ========== CONFIGURAÇÃO DO CHAT ==========
 let privateChannel = null;

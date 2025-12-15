@@ -51,22 +51,6 @@ class ChatRoomController extends Controller
         // Garantir que a sessão seja salva
         $request->session()->save();
 
-        // Verificar se a sessão foi salva corretamente
-        $sessionId = $request->session()->getId();
-        $savedRole = $request->session()->get('chat_user_role');
-        $savedRoom = $request->session()->get('authenticated_chat_room');
-        
-        Log::info('Usuário autenticado na sala de chat', [
-            'room_code' => $roomCode,
-            'user_role' => $userRole,
-            'session_id' => $sessionId,
-            'session_data' => [
-                'chat_user_role' => $savedRole,
-                'authenticated_chat_room' => $savedRoom,
-            ],
-            'session_saved' => ($savedRole === $userRole && $savedRoom === $roomCode),
-        ]);
-
         return redirect()->route('chat.room', $roomCode)
             ->with('success', 'Autenticado com sucesso!');
     }
