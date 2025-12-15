@@ -3,7 +3,7 @@ node_modules/
 
 # Laravel
 /vendor/
-/.env
+
 /.env.backup
 /.env.production
 /.phpunit.result.cache
