@@ -74,25 +74,12 @@ Route::get('/history', [PaymentController::class, 'showHistory'])->name('payment
 
 // Rotas para chat
 Route::prefix('chat')->group(function () {
-    Route::get('/{roomCode}', [ChatController::class, 'showLogin'])->name('chat.login');
-    Route::post('/{roomCode}/authenticate', [ChatController::class, 'authenticate'])->name('chat.authenticate');
-    Route::get('/{roomCode}/room', [ChatController::class, 'showRoom'])->name('chat.room');
-    
-    // Endpoints internos para processar mensagens de WebSocket (chamados após whisper)
-    // Mantém arquitetura orientada a eventos - HTTP apenas para processar, não para enviar
-    Route::post('/{roomCode}/process-message', [ChatController::class, 'processMessageFromWebSocket'])
-        ->middleware('throttle:30,1') // 30 requisições por minuto
-        ->name('chat.process-message');
-    Route::post('/{roomCode}/process-call-signal', [ChatController::class, 'processCallSignalFromWebSocket'])
-        ->middleware('throttle:60,1') // 60 requisições por minuto (chamadas são mais frequentes)
-        ->name('chat.process-call-signal');
+    Route::get('/{roomCode}', [\App\Http\Controllers\ChatRoomController::class, 'showLogin'])->name('chat.login');
+    Route::post('/{roomCode}/authenticate', [\App\Http\Controllers\ChatRoomController::class, 'authenticate'])->name('chat.authenticate');
+    Route::get('/{roomCode}/room', [\App\Http\Controllers\ChatRoomController::class, 'showRoom'])->name('chat.room');
 });
 
-// Webhook interno do Reverb para processar client events
-// Este endpoint é chamado pelo Reverb, não pelo frontend
-Route::post('/reverb/webhook', [App\Http\Controllers\ReverbWebhookController::class, 'handleClientEvent'])
-    ->middleware('throttle:60,1')
-    ->name('reverb.webhook');
+
 
 // WhatsApp QR Code endpoint (única instância - uso interno)
 Route::get('/whatsapp/qr-code', [WhatsApiController::class, 'getQrCode'])->middleware('auth');

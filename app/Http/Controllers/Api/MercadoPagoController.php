@@ -104,7 +104,8 @@ class MercadoPagoController extends Controller
             // Still create chat room if it doesn't exist (for idempotency)
             $existingChatRoom = ChatRoom::where('payment_id', $paymentModel->id)->first();
             if (!$existingChatRoom) {
-                $chatRoom = \App\Http\Controllers\ChatController::createChatRoomForPayment($paymentModel);
+                $chatService = app(\App\Services\ChatService::class);
+                $chatRoom = $chatService->createChatRoomForPayment($paymentModel);
                 Log::info('Created chat room for already processed payment', [
                     'payment_id' => $paymentModel->id,
                     'chat_room_id' => $chatRoom->id
@@ -160,7 +161,8 @@ class MercadoPagoController extends Controller
         $paymentModel->save();
 
         // Create chat room
-        $chatRoom = \App\Http\Controllers\ChatController::createChatRoomForPayment($paymentModel);
+        $chatService = app(\App\Services\ChatService::class);
+        $chatRoom = $chatService->createChatRoomForPayment($paymentModel);
         
         Log::info('Payment approved, creating chat room', [
             'payment_id' => $paymentModel->id,
