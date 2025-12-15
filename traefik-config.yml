@@ -1,0 +1,23 @@
+http:
+  routers:
+    aplication-pdr-laravel-aplication-dqvnri-router-12:
+      rule: Host(`uniontechnicals.com`)
+      service: aplication-pdr-laravel-aplication-dqvnri-service-12
+      middlewares:
+        - redirect-to-https
+      entryPoints:
+        - web
+    aplication-pdr-laravel-aplication-dqvnri-router-websecure-12:
+      rule: Host(`uniontechnicals.com`)
+      service: aplication-pdr-laravel-aplication-dqvnri-service-12
+      middlewares: []
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+  services:
+    aplication-pdr-laravel-aplication-dqvnri-service-12:
+      loadBalancer:
+        servers:
+          - url: http://aplication-pdr-laravel-aplication-dqvnri:80
+        passHostHeader: true
