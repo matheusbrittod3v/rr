@@ -300,13 +300,16 @@
 
 <script>
 // Configuração e constantes
+@php
+    $chatConfig = [
+        'lastMessageId' => $chatRoom->messages->max('id') ?? 0,
+        'roomCode' => $chatRoom->room_code,
+        'sendMessageUrl' => route('chat.send-message', $chatRoom->room_code),
+        'senderType' => session('chat_user_role', 'client'),
+    ];
+@endphp
 const DEBUG = @json(config('app.debug', false));
-const CHAT_CONFIG = @json([
-    'lastMessageId' => $chatRoom->messages->max('id') ?? 0,
-    'roomCode' => $chatRoom->room_code,
-    'sendMessageUrl' => route('chat.send-message', $chatRoom->room_code),
-    'senderType' => session('chat_user_role', 'client'),
-]);
+const CHAT_CONFIG = @json($chatConfig);
 
 // Constantes
 const CONFIG = {

@@ -8,7 +8,8 @@
     },
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "postinstall": "echo 'Node version:' && node --version && echo 'NPM version:' && npm --version"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",

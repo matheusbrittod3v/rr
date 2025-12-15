@@ -25,19 +25,34 @@ phpExtensions = [
 [phases.install]
 cmds = [
   "composer install --no-dev --optimize-autoloader --no-interaction",
-  "npm ci --omit=dev"
+  "echo '=== Verificando Node.js ==='",
+  "node --version || (echo 'ERRO: Node.js não encontrado!' && exit 1)",
+  "npm --version || (echo 'ERRO: NPM não encontrado!' && exit 1)",
+  "echo '=== Instalando dependências NPM (incluindo devDependencies para build) ==='",
+  "if [ -f package-lock.json ]; then npm ci; else npm install; fi",
+  "echo '=== Dependências instaladas com sucesso ==='"
 ]
 
 [phases.build]
 cmds = [
+  "echo '=== Iniciando build de assets ==='",
+  "node --version",
+  "npm --version",
+  "echo '=== Executando npm run build ==='",
+  "npm run build || (echo 'ERRO no build! Verificando dependências...' && npm install && npm run build)",
+  "echo '=== Verificando se build foi gerado ==='",
+  "ls -la public/build/ || echo 'AVISO: Diretório public/build não encontrado'",
+  "echo '=== Build concluído com sucesso ==='",
   "php artisan config:cache",
   "php artisan route:cache",
   "php artisan view:cache",
-  "npm run build"
+  "echo '=== Cache do Laravel gerado ==='"
 ]
 
 [start]
 cmd = "{nginx_start_serving_cmd}"
 
 [variables]
-NIXPACKS_PHP_ROOT_DIR = "/app/public" 
+NIXPACKS_PHP_ROOT_DIR = "/app/public"
+NIXPACKS_NODE_VERSION = "18"
+NODE_ENV = "production" 
