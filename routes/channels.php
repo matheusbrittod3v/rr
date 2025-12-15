@@ -20,20 +20,38 @@ Broadcast::channel('private-chat-room.{roomCode}', function ($user, $roomCode) {
     
     // Verificar se tem sessão
     if (!$request->hasSession()) {
+        \Log::warning('Broadcast: Sem sessão', ['roomCode' => $roomCode]);
         return false;
     }
     
+    $session = $request->session();
+    
     // Verificar se a sessão tem os dados corretos
-    $authenticatedRoom = $request->session()->get('authenticated_chat_room');
-    $userRole = $request->session()->get('chat_user_role');
+    $authenticatedRoom = $session->get('authenticated_chat_room');
+    $userRole = $session->get('chat_user_role');
+    
+    \Log::info('Broadcast: Verificando autorização', [
+        'roomCode' => $roomCode,
+        'authenticatedRoom' => $authenticatedRoom,
+        'userRole' => $userRole,
+        'match' => $authenticatedRoom === $roomCode,
+        'hasRole' => !empty($userRole),
+    ]);
     
     // Se a sala autenticada na sessão corresponde à sala do canal, autorizar
     if ($authenticatedRoom === $roomCode && $userRole) {
+        \Log::info('Broadcast: Autorizado', ['roomCode' => $roomCode, 'userRole' => $userRole]);
         return [
             'id' => $userRole,
             'role' => $userRole,
         ];
     }
+    
+    \Log::warning('Broadcast: Negado', [
+        'roomCode' => $roomCode,
+        'authenticatedRoom' => $authenticatedRoom,
+        'userRole' => $userRole,
+    ]);
     
     return false;
 });
