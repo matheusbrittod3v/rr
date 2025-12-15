@@ -7,21 +7,21 @@ window.Pusher = Pusher;
 /**
  * Configuração do Laravel Echo com Reverb
  * 
- * Credenciais do test-reverb.php que funcionam:
+ * Configurado para localhost:
  * - REVERB_APP_KEY: sdfghjkhgfdfghjkhgfghjk
- * - REVERB_HOST: aplication-pdr-laravel-aplication-dqvnri-fc8b57-31-97-14-4.traefik.me
- * - REVERB_PORT: 443
+ * - REVERB_HOST: localhost
+ * - REVERB_PORT: 8080
  * - REVERB_SCHEME: http
  */
 
-// Obter credenciais do ambiente ou usar valores padrão do teste
+// Obter credenciais do ambiente ou usar valores padrão para localhost
 const reverbKey = import.meta.env.VITE_REVERB_APP_KEY || 'sdfghjkhgfdfghjkhgfghjk';
-const reverbHost = import.meta.env.VITE_REVERB_HOST || 'aplication-pdr-laravel-aplication-dqvnri-fc8b57-31-97-14-4.traefik.me';
-const reverbPort = import.meta.env.VITE_REVERB_PORT ?? '443';
+const reverbHost = import.meta.env.VITE_REVERB_HOST || 'localhost';
+const reverbPort = import.meta.env.VITE_REVERB_PORT ?? '8080';
 const reverbScheme = import.meta.env.VITE_REVERB_SCHEME ?? 'http';
 
 // Converter porta para número
-const port = parseInt(reverbPort, 10) || 443;
+const port = parseInt(reverbPort, 10) || 8080;
 const useTLS = reverbScheme === 'https';
 
 console.log('[Echo] Configurando Laravel Echo com Reverb:', {
@@ -45,6 +45,8 @@ if (reverbKey && reverbHost) {
             wssPort: port,
             forceTLS: useTLS,
             enabledTransports: ['ws', 'wss'],
+            disableStats: true, // Desabilita estatísticas do Pusher (não necessário para Reverb)
+            cluster: 'mt1', // Cluster padrão (ignorado quando wsHost é customizado, mas necessário para Pusher.js)
         });
 
         console.log('[Echo] ✅ Laravel Echo inicializado com sucesso!');
@@ -52,6 +54,7 @@ if (reverbKey && reverbHost) {
         console.log('[Echo] Conectando em:', `${reverbScheme}://${reverbHost}:${port}`);
     } catch (error) {
         console.error('[Echo] ❌ Erro ao inicializar Echo:', error);
+        console.error('[Echo] Detalhes do erro:', error.message, error.stack);
     }
 } else {
     console.error('[Echo] ❌ Credenciais Reverb não configuradas:', {

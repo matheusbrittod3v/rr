@@ -5,11 +5,10 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
     
-    // Configuração do Reverb baseada no test-reverb.php que funciona
-    // Mesmas credenciais do teste: REVERB_APP_KEY, REVERB_HOST, REVERB_PORT=443, REVERB_SCHEME=http
+    // Configuração do Reverb para localhost
     const REVERB_APP_KEY = env.VITE_REVERB_APP_KEY || env.REVERB_APP_KEY || 'sdfghjkhgfdfghjkhgfghjk';
-    const REVERB_HOST = env.VITE_REVERB_HOST || env.REVERB_HOST || 'aplication-pdr-laravel-aplication-dqvnri-fc8b57-31-97-14-4.traefik.me';
-    const REVERB_PORT = env.VITE_REVERB_PORT || env.REVERB_PORT || '443';
+    const REVERB_HOST = env.VITE_REVERB_HOST || env.REVERB_HOST || 'localhost';
+    const REVERB_PORT = env.VITE_REVERB_PORT || env.REVERB_PORT || '8080';
     const REVERB_SCHEME = env.VITE_REVERB_SCHEME || env.REVERB_SCHEME || 'http';
     
     return {

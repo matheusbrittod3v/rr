@@ -31,10 +31,10 @@ class AppServiceProvider extends ServiceProvider
         // Força HTTPS sempre em produção OU quando detectar que está atrás de proxy HTTPS
         $forceHttps = false;
         
-        // 1. Se está em produção, força HTTPS
-        if ($this->app->environment('production')) {
+        if (env('APP_ENV') === 'production') {
             $forceHttps = true;
         }
+        
         
         // 2. Se estiver atrás de proxy reverso com HTTPS (Nginx, Cloudflare, etc)
         try {
