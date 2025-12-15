@@ -4,62 +4,60 @@ import Pusher from 'pusher-js';
 // Make Pusher available globally
 window.Pusher = Pusher;
 
-// Initialize Echo with Reverb
-if (typeof Pusher !== 'undefined') {
-    // Initialize Echo with Reverb configuration usando variáveis do .env
-    // Mesmas credenciais do test-reverb.php que funcionam:
-    // REVERB_APP_KEY='sdfghjkhgfdfghjkhgfghjk'
-    // REVERB_HOST='aplication-pdr-laravel-aplication-dqvnri-fc8b57-31-97-14-4.traefik.me'
-    // REVERB_PORT=443
-    // REVERB_SCHEME=http
-    const reverbKey = import.meta.env.VITE_REVERB_APP_KEY || 'sdfghjkhgfdfghjkhgfghjk';
-    const reverbHost = import.meta.env.VITE_REVERB_HOST || 'aplication-pdr-laravel-aplication-dqvnri-fc8b57-31-97-14-4.traefik.me';
-    const reverbPort = import.meta.env.VITE_REVERB_PORT || '443';
-    const reverbScheme = import.meta.env.VITE_REVERB_SCHEME || 'http';
-    
-    console.log('[DEBUG] Configurando Reverb com credenciais:', {
-        key: reverbKey ? reverbKey.substring(0, 10) + '...' : 'não configurado',
-        host: reverbHost,
-        port: reverbPort,
-        scheme: reverbScheme
-    });
-    
-    if (reverbKey && reverbHost) {
-        const port = parseInt(reverbPort, 10) || 445;
-        const useTLS = reverbScheme === 'https';
-        
-        // Configuração do Echo com Reverb
-        window.Echo = new Echo({
-            broadcaster: 'reverb',
-            key: reverbKey,
-            wsHost: reverbHost,
-            wsPort: port, // Porta para WebSocket (ws://)
-            wssPort: port, // Porta para WebSocket Secure (wss://)
-            forceTLS: useTLS,
-            enabledTransports: ['ws', 'wss'],
-        });
+/**
+ * Configuração do Laravel Echo com Reverb
+ * 
+ * Credenciais do test-reverb.php que funcionam:
+ * - REVERB_APP_KEY: sdfghjkhgfdfghjkhgfghjk
+ * - REVERB_HOST: aplication-pdr-laravel-aplication-dqvnri-fc8b57-31-97-14-4.traefik.me
+ * - REVERB_PORT: 443
+ * - REVERB_SCHEME: http
+ */
 
-        console.log('[DEBUG] ✅ Echo inicializado com Reverb:', {
-            broadcaster: 'reverb',
-            key: reverbKey.substring(0, 10) + '...',
+// Obter credenciais do ambiente ou usar valores padrão do teste
+const reverbKey = import.meta.env.VITE_REVERB_APP_KEY || 'sdfghjkhgfdfghjkhgfghjk';
+const reverbHost = import.meta.env.VITE_REVERB_HOST || 'aplication-pdr-laravel-aplication-dqvnri-fc8b57-31-97-14-4.traefik.me';
+const reverbPort = import.meta.env.VITE_REVERB_PORT ?? '443';
+const reverbScheme = import.meta.env.VITE_REVERB_SCHEME ?? 'http';
+
+// Converter porta para número
+const port = parseInt(reverbPort, 10) || 443;
+const useTLS = reverbScheme === 'https';
+
+console.log('[Echo] Configurando Laravel Echo com Reverb:', {
+    key: reverbKey ? reverbKey.substring(0, 10) + '...' : 'não configurado',
+    host: reverbHost,
+    port: port,
+    scheme: reverbScheme,
+    useTLS: useTLS
+});
+
+// Inicializar Echo apenas se tivermos as credenciais necessárias
+// IMPORTANTE: Echo SEMPRE usa broadcaster: 'pusher', mesmo conectando ao Reverb
+// Reverb implementa o protocolo Pusher, então o Echo fala protocolo Pusher
+if (reverbKey && reverbHost) {
+    try {
+        window.Echo = new Echo({
+            broadcaster: 'pusher', // ✅ CORRETO: sempre 'pusher', mesmo com Reverb
+            key: reverbKey,
             wsHost: reverbHost,
             wsPort: port,
             wssPort: port,
             forceTLS: useTLS,
-            scheme: reverbScheme,
-            enabledTransports: ['ws', 'wss']
+            enabledTransports: ['ws', 'wss'],
         });
-        console.log('[DEBUG] Conexão WebSocket configurada e pronta para:', reverbHost + ':' + port);
-    } else {
-        console.error('[DEBUG] ❌ Credenciais Reverb não configuradas:', {
-            hasKey: !!reverbKey,
-            hasHost: !!reverbHost
-        });
-        console.warn('Reverb credentials not configured. WebSocket connection not initialized.');
+
+        console.log('[Echo] ✅ Laravel Echo inicializado com sucesso!');
+        console.log('[Echo] Broadcaster: pusher (conectando ao Reverb)');
+        console.log('[Echo] Conectando em:', `${reverbScheme}://${reverbHost}:${port}`);
+    } catch (error) {
+        console.error('[Echo] ❌ Erro ao inicializar Echo:', error);
     }
 } else {
-    console.error('[DEBUG] ❌ Pusher não disponível');
-    console.warn('Pusher not available, WebSocket connection not initialized');
+    console.error('[Echo] ❌ Credenciais Reverb não configuradas:', {
+        hasKey: !!reverbKey,
+        hasHost: !!reverbHost
+    });
 }
 
 // Export functions for handling WebSocket events
