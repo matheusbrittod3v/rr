@@ -7,8 +7,8 @@
 $REVERB_APP_ID     = '345678';
 $REVERB_APP_KEY    = 'sdfghjkhgfdfghjkhgfghjk';
 $REVERB_APP_SECRET = 'dfghjkrtyuijhgfghjklkjhgfghjkjhgh';
-$REVERB_HOST       = 'localhost';
-$REVERB_PORT       = 8080;
+$REVERB_HOST       = 'uniontechnicals.com';
+$REVERB_PORT       = 8081;
 $REVERB_SCHEME     = 'http'; // http ou https
 
 $endpoint = "{$REVERB_SCHEME}://{$REVERB_HOST}:{$REVERB_PORT}/apps/{$REVERB_APP_ID}/events";
