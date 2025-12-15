@@ -35,17 +35,17 @@
                             {{ $chatRoom->room_code }}
                         </span>
                         <!-- Botões de Chamada -->
-                        <button id="call-video-btn" class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-white/10 text-white hover:bg-white/20 transition-all backdrop-blur-sm" title="Chamada de vídeo">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <button id="call-video-btn" aria-label="Iniciar chamada de vídeo" class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-white/10 text-white hover:bg-white/20 transition-all backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600" title="Chamada de vídeo">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                             </svg>
                         </button>
-                        <button id="call-audio-btn" class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-white/10 text-white hover:bg-white/20 transition-all backdrop-blur-sm" title="Chamada de voz">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <button id="call-audio-btn" aria-label="Iniciar chamada de voz" class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-white/10 text-white hover:bg-white/20 transition-all backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600" title="Chamada de voz">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                             </svg>
                         </button>
-                        <a href="{{ url('/') }}" class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-white/10 text-white hover:bg-white/20 transition-all backdrop-blur-sm">
+                        <a href="{{ route('home') ?? url('/') }}" aria-label="Sair do chat" class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-white/10 text-white hover:bg-white/20 transition-all backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                             </svg>
@@ -56,7 +56,7 @@
             </div>
 
             <!-- Messages Container -->
-            <div id="chat-messages" class="h-[500px] overflow-y-auto p-6 bg-gradient-to-b from-white to-gray-50 scroll-smooth">
+            <div id="chat-messages" role="log" aria-live="polite" aria-label="Mensagens do chat" class="h-[500px] overflow-y-auto p-6 bg-gradient-to-b from-white to-gray-50 scroll-smooth">
                 @foreach($chatRoom->messages as $message)
                     <div class="mb-4 animate-fade-in" data-message-id="{{ $message->id }}">
                         <div class="flex {{ $message->sender_type === 'client' ? 'justify-end' : 'justify-start' }}">
@@ -67,28 +67,28 @@
                                         'bg-white text-gray-800 border border-gray-200 rounded-bl-sm'
                                     }}">
                                         @if($message->message)
-                                            <p class="text-sm break-words">{{ $message->message }}</p>
+                                            <p class="text-sm break-words">{{ e($message->message) }}</p>
                                         @endif
                                         
-                                        @if($message->file_path)
+                                        @if($message->file_path && $message->getSafeFilePath())
                                             @php
-                                                $fileExt = strtolower(pathinfo($message->file_path, PATHINFO_EXTENSION));
-                                                $isImage = in_array($fileExt, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
+                                                $safePath = $message->getSafeFilePath();
+                                                $fileExt = $message->getFileExtension();
                                             @endphp
-                                            @if($isImage)
+                                            @if($message->isImage())
                                                 <div class="mt-2">
-                                                    <img src="{{ asset('storage/' . $message->file_path) }}" alt="Imagem" class="max-w-xs rounded-lg cursor-pointer" onclick="window.open('{{ asset('storage/' . $message->file_path) }}', '_blank')">
+                                                    <img src="{{ asset('storage/' . e($safePath)) }}" alt="Imagem anexada" class="max-w-xs rounded-lg cursor-pointer" loading="lazy" onclick="window.open('{{ asset('storage/' . e($safePath)) }}', '_blank')">
                                                 </div>
                                             @else
                                                 <div class="mt-2 p-2 bg-black/10 rounded-lg text-sm flex items-center">
-                                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg> 
-                                                    <a href="{{ asset('storage/' . $message->file_path) }}" target="_blank" class="hover:underline">Ver anexo ({{ strtoupper($fileExt) }})</a>
+                                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg> 
+                                                    <a href="{{ asset('storage/' . e($safePath)) }}" target="_blank" rel="noopener noreferrer" class="hover:underline">Ver anexo ({{ strtoupper(e($fileExt)) }})</a>
                                                 </div>
                                             @endif
                                         @endif
                                         
-                                        <p class="text-xs mt-1.5 {{ $message->sender_type === 'client' ? 'text-blue-100' : 'text-gray-500' }}">
-                                            {{ $message->created_at->format('H:i') }}
+                                        <p class="text-xs mt-1.5 {{ $message->sender_type === 'client' ? 'text-blue-200' : 'text-gray-500' }}">
+                                            {{ $message->getFormattedTime() }}
                                         </p>
                                     </div>
                                 </div>
@@ -111,12 +111,12 @@
                     </div>
                     
                     <div class="flex space-x-2 pb-8">
-                        <input type="file" id="file-input" class="hidden" accept="image/*,.zip,.rar,.7z,.txt,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
-                        <button type="button" id="attach-button" class="p-3 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all hover:scale-105" title="Anexar arquivo">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                        <input type="file" id="file-input" class="hidden" accept="image/*,.zip,.rar,.7z,.txt,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" aria-label="Selecionar arquivo para anexar">
+                        <button type="button" id="attach-button" aria-label="Anexar arquivo" class="p-3 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" title="Anexar arquivo">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
                         </button>
-                        <button type="button" id="send-button" class="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all hover:scale-105 shadow-lg active:scale-95 transform duration-150" title="Enviar mensagem">
-                            <svg id="send-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                        <button type="button" id="send-button" aria-label="Enviar mensagem" class="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all hover:scale-105 shadow-lg active:scale-95 transform duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" title="Enviar mensagem">
+                            <svg id="send-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
                         </button>
                     </div>
                 </form>
@@ -134,10 +134,10 @@
 </div>
 
 <!-- Notificação de Chamada Recebida -->
-<div id="incoming-call-notification" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+<div id="incoming-call-notification" role="dialog" aria-labelledby="incoming-call-title" aria-modal="true" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
     <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 animate-scale-in">
         <div class="text-center">
-            <div class="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+            <div class="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse" aria-hidden="true">
                 <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
@@ -145,14 +145,14 @@
             <h3 class="text-2xl font-bold text-gray-900 mb-2" id="incoming-call-title">Chamada Recebida</h3>
             <p class="text-gray-600 mb-6" id="incoming-call-subtitle">Deseja aceitar esta chamada?</p>
             <div class="flex items-center justify-center space-x-4">
-                <button id="reject-call-btn" class="px-6 py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all font-medium flex items-center space-x-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button id="reject-call-btn" aria-label="Recusar chamada" class="px-6 py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all font-medium flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                     <span>Recusar</span>
                 </button>
-                <button id="accept-call-btn" class="px-6 py-3 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-all font-medium flex items-center space-x-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button id="accept-call-btn" aria-label="Aceitar chamada" class="px-6 py-3 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-all font-medium flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                     </svg>
                     <span>Aceitar</span>
@@ -163,7 +163,7 @@
 </div>
 
 <!-- Interface de Chamada (Overlay) -->
-<div id="call-overlay" class="hidden fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center">
+<div id="call-overlay" role="dialog" aria-labelledby="call-title" aria-modal="true" class="hidden fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center">
     <!-- Chamada Minimizada -->
     <div id="call-minimized" class="hidden fixed bottom-4 right-4 bg-white rounded-lg shadow-2xl p-4 w-64 z-60 cursor-pointer hover:scale-105 transition-transform">
         <div class="flex items-center justify-between">
@@ -201,43 +201,43 @@
         <div class="bg-gray-900 bg-opacity-75 px-6 py-4">
             <div class="flex items-center justify-center space-x-4">
                 <!-- Toggle Câmera -->
-                <button id="toggle-video" class="p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all text-white">
-                    <svg id="video-on-icon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button id="toggle-video" aria-label="Ligar ou desligar câmera" class="p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-900">
+                    <svg id="video-on-icon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
-                    <svg id="video-off-icon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg id="video-off-icon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                     </svg>
                 </button>
                 
                 <!-- Toggle Áudio -->
-                <button id="toggle-audio" class="p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all text-white">
-                    <svg id="audio-on-icon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button id="toggle-audio" aria-label="Mutar ou desmutar áudio" class="p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-900">
+                    <svg id="audio-on-icon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                     </svg>
-                    <svg id="audio-off-icon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg id="audio-off-icon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
                     </svg>
                 </button>
                 
                 <!-- Trocar Câmera -->
-                <button id="switch-camera" class="p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all text-white">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button id="switch-camera" aria-label="Trocar câmera" class="p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-900">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                 </button>
                 
                 <!-- Minimizar -->
-                <button id="minimize-call" class="p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all text-white">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button id="minimize-call" aria-label="Minimizar chamada" class="p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-900">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
                     </svg>
                 </button>
                 
                 <!-- Encerrar Chamada -->
-                <button id="end-call" class="p-4 bg-red-600 rounded-full hover:bg-red-700 transition-all text-white">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button id="end-call" aria-label="Encerrar chamada" class="p-4 bg-red-600 rounded-full hover:bg-red-700 transition-all text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-900">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                 </button>
@@ -299,10 +299,36 @@
 </style>
 
 <script>
+// Configuração e constantes
+const DEBUG = @json(config('app.debug', false));
+const CHAT_CONFIG = @json([
+    'lastMessageId' => $chatRoom->messages->max('id') ?? 0,
+    'roomCode' => $chatRoom->room_code,
+    'sendMessageUrl' => route('chat.send-message', $chatRoom->room_code),
+    'senderType' => session('chat_user_role', 'client'),
+]);
+
+// Constantes
+const CONFIG = {
+    MAX_ECHO_ATTEMPTS: 50,
+    ECHO_CHECK_INTERVAL: 100,
+    MAX_MESSAGE_LENGTH: 1000,
+    DEBOUNCE_DELAY: 300,
+};
+
+// Função helper para debug
+function debugLog(...args) {
+    if (DEBUG) {
+        if (DEBUG) {
+        console.log('[DEBUG]', ...args);
+    }
+    }
+}
+
 // Aguardar Echo estar disponível antes de iniciar
 (function() {
-    console.log('[DEBUG] Iniciando inicialização do chat...');
-    console.log('[DEBUG] Verificando módulos Vite carregados...');
+    debugLog('Iniciando inicialização do chat...');
+    debugLog('Verificando módulos Vite carregados...');
     
     // Aguardar o DOM estar pronto
     function waitForDOM(callback) {
@@ -314,30 +340,26 @@
     }
     
     // Aguardar Echo estar disponível
-    function waitForEcho(callback, maxAttempts = 50) {
+    function waitForEcho(callback) {
         let attempts = 0;
         
         function checkEcho() {
             attempts++;
-            console.log(`[DEBUG] Tentativa ${attempts}/${maxAttempts}: Verificando se Echo está disponível...`);
-            console.log('[DEBUG] window.Echo:', window.Echo);
-            console.log('[DEBUG] typeof window.Echo:', typeof window.Echo);
-            console.log('[DEBUG] window.Pusher:', window.Pusher);
+            debugLog(`Tentativa ${attempts}/${CONFIG.MAX_ECHO_ATTEMPTS}: Verificando se Echo está disponível...`);
             
             if (window.Echo && typeof window.Echo.channel === 'function') {
-                console.log('[DEBUG] ✅ Echo encontrado e funcional!', window.Echo);
+                debugLog('✅ Echo encontrado e funcional!');
                 callback();
-            } else if (attempts >= maxAttempts) {
-                console.error('[DEBUG] ❌ Timeout: Echo não foi carregado após', maxAttempts * 100, 'ms');
-                console.error('[DEBUG] Verifique se o websocket.js está sendo importado corretamente em app.js');
-                console.error('[DEBUG] Verifique se as dependências (laravel-echo, pusher-js) estão instaladas');
-                // Mesmo assim tentar continuar se algum Echo estiver disponível
+            } else if (attempts >= CONFIG.MAX_ECHO_ATTEMPTS) {
+                console.error('❌ Timeout: Echo não foi carregado após', CONFIG.MAX_ECHO_ATTEMPTS * CONFIG.ECHO_CHECK_INTERVAL, 'ms');
+                console.error('Verifique se o websocket.js está sendo importado corretamente em app.js');
+                console.error('Verifique se as dependências (laravel-echo, pusher-js) estão instaladas');
                 if (window.Echo) {
-                    console.warn('[DEBUG] ⚠️ Tentando usar Echo parcialmente disponível...');
+                    console.warn('⚠️ Tentando usar Echo parcialmente disponível...');
                     callback();
                 }
             } else {
-                setTimeout(checkEcho, 100);
+                setTimeout(checkEcho, CONFIG.ECHO_CHECK_INTERVAL);
             }
         }
         
@@ -346,12 +368,12 @@
     
     // Iniciar quando DOM estiver pronto
     waitForDOM(function() {
-        console.log('[DEBUG] DOM carregado, aguardando Echo...');
+        debugLog('DOM carregado, aguardando Echo...');
         waitForEcho(function() {
     
-    console.log('[DEBUG] ========================================');
-    console.log('[DEBUG] INICIALIZANDO CHAT - DEBUG COMPLETO');
-    console.log('[DEBUG] ========================================');
+    debugLog('========================================');
+    debugLog('INICIALIZANDO CHAT - DEBUG COMPLETO');
+    debugLog('========================================');
     
     // UI Elements
     const elements = {
@@ -368,7 +390,7 @@
         charCount: document.getElementById('char-count')
     };
     
-    console.log('[DEBUG] Elementos DOM carregados:', {
+    debugLog('Elementos DOM carregados:', {
         chatForm: !!elements.chatForm,
         messageInput: !!elements.messageInput,
         sendButton: !!elements.sendButton,
@@ -377,23 +399,23 @@
     
     // State
     const state = {
-        lastMessageId: {{ $chatRoom->messages->max('id') ?? 0 }},
+        lastMessageId: CHAT_CONFIG.lastMessageId,
         selectedFile: null
     };
     
-    console.log('[DEBUG] Estado inicial:', {
+    debugLog('Estado inicial:', {
         lastMessageId: state.lastMessageId,
         selectedFile: state.selectedFile
     });
     
     // Config
     const config = {
-        roomCode: "{{ $chatRoom->room_code }}",
-        csrfToken: "{{ csrf_token() }}",
-        sendMessageUrl: "{{ route('chat.send-message', $chatRoom->room_code) }}"
+        roomCode: CHAT_CONFIG.roomCode,
+        csrfToken: document.querySelector('meta[name="csrf-token"]')?.content || '',
+        sendMessageUrl: CHAT_CONFIG.sendMessageUrl
     };
     
-    console.log('[DEBUG] Configuração:', {
+    debugLog('Configuração:', {
         roomCode: config.roomCode,
         sendMessageUrl: config.sendMessageUrl,
         csrfTokenLength: config.csrfToken.length
@@ -405,20 +427,20 @@
     elements.messageInput.addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = (this.scrollHeight) + 'px';
-        elements.charCount.textContent = this.value.length + '/1000';
+        elements.charCount.textContent = this.value.length + '/' + CONFIG.MAX_MESSAGE_LENGTH;
     });
 
     // Função para enviar mensagem - requisição assíncrona em background
     async function sendMessage() {
-        console.log('[DEBUG] ========================================');
-        console.log('[DEBUG] INICIANDO ENVIO DE MENSAGEM');
-        console.log('[DEBUG] ========================================');
+        debugLog('========================================');
+        debugLog('INICIANDO ENVIO DE MENSAGEM');
+        debugLog('========================================');
         
         const message = elements.messageInput.value.trim();
         const hasMessage = !!message;
         const hasFile = !!state.selectedFile;
         
-        console.log('[DEBUG] Validação de entrada:', {
+        debugLog('Validação de entrada:', {
             message: message,
             messageLength: message.length,
             hasMessage: hasMessage,
@@ -431,24 +453,24 @@
         });
         
         if (!message && !state.selectedFile) {
-            console.log('[DEBUG] ❌ Envio cancelado: mensagem vazia e sem arquivo');
+            debugLog('❌ Envio cancelado: mensagem vazia e sem arquivo');
             return;
         }
 
-        console.log('[DEBUG] Preparando FormData...');
+        debugLog('Preparando FormData...');
         const formData = new FormData();
         formData.append('message', message);
         formData.append('_token', config.csrfToken);
         if (state.selectedFile) {
             formData.append('file', state.selectedFile);
-            console.log('[DEBUG] Arquivo adicionado ao FormData:', {
+            debugLog('Arquivo adicionado ao FormData:', {
                 name: state.selectedFile.name,
                 size: state.selectedFile.size,
                 type: state.selectedFile.type
             });
         }
         
-        console.log('[DEBUG] FormData preparado:', {
+        debugLog('FormData preparado:', {
             hasMessage: formData.has('message'),
             hasToken: formData.has('_token'),
             hasFile: formData.has('file')
@@ -465,13 +487,13 @@
             sendIcon.style.display = 'none';
         }
         sendButton.innerHTML = '<svg class="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
-        console.log('[DEBUG] Botão de enviar desabilitado com animação de loading');
+        debugLog('Botão de enviar desabilitado com animação de loading');
 
         try {
-            console.log('[DEBUG] Enviando requisição HTTP...');
-            console.log('[DEBUG] URL:', config.sendMessageUrl);
-            console.log('[DEBUG] Método: POST');
-            console.log('[DEBUG] Headers:', {
+            debugLog('Enviando requisição HTTP...');
+            debugLog('URL:', config.sendMessageUrl);
+            debugLog('Método: POST');
+            debugLog('Headers:', {
                 'X-Requested-With': 'XMLHttpRequest'
             });
             
@@ -487,40 +509,44 @@
             });
             
             const requestTime = Date.now() - startTime;
-            console.log('[DEBUG] ✅ Resposta recebida em', requestTime + 'ms');
-            console.log('[DEBUG] Status HTTP:', res.status, res.statusText);
-            console.log('[DEBUG] Headers da resposta:', Object.fromEntries(res.headers.entries()));
+            debugLog('✅ Resposta recebida em', requestTime + 'ms');
+            debugLog('Status HTTP:', res.status, res.statusText);
+            debugLog('Headers da resposta:', Object.fromEntries(res.headers.entries()));
             
             const data = await res.json();
-            console.log('[DEBUG] Dados da resposta:', data);
+            debugLog('Dados da resposta:', data);
             
             if (data.success) {
-                console.log('[DEBUG] ✅ Mensagem enviada com sucesso!');
-                console.log('[DEBUG] Limpando formulário...');
+                debugLog('✅ Mensagem enviada com sucesso!');
+                debugLog('Limpando formulário...');
                 
                 // Limpar formulário apenas se sucesso
                 elements.messageInput.value = '';
                 elements.messageInput.style.height = 'auto';
-                elements.charCount.textContent = '0/1000';
+                elements.charCount.textContent = '0/' + CONFIG.MAX_MESSAGE_LENGTH;
                 state.selectedFile = null;
                 elements.filePreview.classList.add('hidden');
                 elements.fileInput.value = '';
                 
-                console.log('[DEBUG] Formulário limpo');
-                console.log('[DEBUG] Aguardando broadcast via Reverb...');
+                debugLog('Formulário limpo');
+                debugLog('Aguardando broadcast via Reverb...');
             } else {
-                console.error('[DEBUG] ❌ Erro ao enviar mensagem:', data);
+                console.error('❌ Erro ao enviar mensagem:', data);
+                // TODO: Substituir alert por sistema de notificações
                 alert('Erro ao enviar mensagem. Tente novamente.');
             }
         } catch (error) {
-            console.error('[DEBUG] ❌ ERRO na requisição:', error);
-            console.error('[DEBUG] Tipo do erro:', error.name);
-            console.error('[DEBUG] Mensagem do erro:', error.message);
-            console.error('[DEBUG] Stack trace:', error.stack);
+            console.error('❌ ERRO na requisição:', error);
+            if (DEBUG) {
+                console.error('Tipo do erro:', error.name);
+                console.error('Mensagem do erro:', error.message);
+                console.error('Stack trace:', error.stack);
+            }
+            // TODO: Substituir alert por sistema de notificações
             alert('Erro ao enviar mensagem. Verifique sua conexão e tente novamente.');
         } finally {
             // Reabilitar botão com animação suave
-            console.log('[DEBUG] Reabilitando botão de enviar...');
+            debugLog('Reabilitando botão de enviar...');
             sendButton.disabled = false;
             sendButton.classList.remove('opacity-50', 'cursor-not-allowed', 'animate-pulse');
             
@@ -537,9 +563,9 @@
             // Atualizar referência do ícone
             elements.sendIcon = document.getElementById('send-icon');
             
-            console.log('[DEBUG] ========================================');
-            console.log('[DEBUG] PROCESSO DE ENVIO FINALIZADO');
-            console.log('[DEBUG] ========================================');
+            debugLog('========================================');
+            debugLog('PROCESSO DE ENVIO FINALIZADO');
+            debugLog('========================================');
         }
     }
     
@@ -558,14 +584,14 @@
         e.stopPropagation();
         
         // Animação de clique
-        console.log('[DEBUG] Animação de clique no botão enviar');
+        debugLog('Animação de clique no botão enviar');
         elements.sendButton.classList.add('animate-pulse');
         elements.sendIcon.classList.add('animate-bounce');
         
         setTimeout(() => {
             elements.sendButton.classList.remove('animate-pulse');
             elements.sendIcon.classList.remove('animate-bounce');
-        }, 300);
+        }, CONFIG.DEBOUNCE_DELAY);
         
         sendMessage();
     });
@@ -577,14 +603,14 @@
             e.stopPropagation();
             
             // Animação visual ao pressionar Enter
-            console.log('[DEBUG] Enter pressionado, animando botão...');
+            debugLog('Enter pressionado, animando botão...');
             elements.sendButton.classList.add('animate-pulse', 'ring-2', 'ring-blue-300');
             elements.sendIcon.classList.add('animate-bounce');
             
             setTimeout(() => {
                 elements.sendButton.classList.remove('animate-pulse', 'ring-2', 'ring-blue-300');
                 elements.sendIcon.classList.remove('animate-bounce');
-            }, 300);
+            }, CONFIG.DEBOUNCE_DELAY);
             
             sendMessage();
         }
@@ -608,12 +634,12 @@
         elements.fileInput.value = '';
     });
 
-    // Add message to chat
+    // Add message to chat (com escape XSS)
     function addMessageToChat(message) {
-        console.log('[DEBUG] ========================================');
-        console.log('[DEBUG] ADICIONANDO MENSAGEM AO CHAT');
-        console.log('[DEBUG] ========================================');
-        console.log('[DEBUG] Dados da mensagem:', {
+        debugLog('========================================');
+        debugLog('ADICIONANDO MENSAGEM AO CHAT');
+        debugLog('========================================');
+        debugLog('Dados da mensagem:', {
             id: message.id,
             senderType: message.sender_type,
             message: message.message,
@@ -623,60 +649,71 @@
         
         // Evitar mensagens duplicadas
         if (message.id <= state.lastMessageId) {
-            console.log('[DEBUG] ⚠️ Mensagem duplicada ignorada:', {
+            debugLog('⚠️ Mensagem duplicada ignorada:', {
                 messageId: message.id,
                 lastMessageId: state.lastMessageId
             });
             return;
         }
         
-        console.log('[DEBUG] Mensagem é nova, processando...');
+        debugLog('Mensagem é nova, processando...');
         state.lastMessageId = message.id;
-        console.log('[DEBUG] lastMessageId atualizado para:', state.lastMessageId);
+        debugLog('lastMessageId atualizado para:', state.lastMessageId);
         
         const messageDiv = document.createElement('div');
         messageDiv.className = 'mb-4 animate-fade-in';
         messageDiv.setAttribute('data-message-id', message.id);
-        console.log('[DEBUG] Elemento DIV criado');
+        debugLog('Elemento DIV criado');
         
         const isClient = message.sender_type === 'client';
-        console.log('[DEBUG] Tipo de remetente:', {
+        debugLog('Tipo de remetente:', {
             senderType: message.sender_type,
             isClient: isClient
         });
         
+        // Escape XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
         let fileHtml = '';
         if (message.file_path) {
-            console.log('[DEBUG] Processando arquivo anexo...');
+            debugLog('Processando arquivo anexo...');
             const fileExt = message.file_path.split('.').pop().toLowerCase();
             const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt);
-            console.log('[DEBUG] Informações do arquivo:', {
+            const safePath = escapeHtml(message.file_path);
+            debugLog('Informações do arquivo:', {
                 filePath: message.file_path,
                 extension: fileExt,
                 isImage: isImage
             });
             
             if (isImage) {
-                fileHtml = `<div class="mt-2"><img src="/storage/${message.file_path}" alt="Imagem" class="max-w-xs rounded-lg cursor-pointer" onclick="window.open('/storage/${message.file_path}', '_blank')"></div>`;
-                console.log('[DEBUG] HTML de imagem gerado');
+                fileHtml = `<div class="mt-2"><img src="/storage/${safePath}" alt="Imagem anexada" class="max-w-xs rounded-lg cursor-pointer" loading="lazy" onclick="window.open('/storage/${safePath}', '_blank')"></div>`;
+                debugLog('HTML de imagem gerado');
             } else {
                 fileHtml = `<div class="mt-2 p-2 bg-black/10 rounded-lg text-sm flex items-center">
-                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg> 
-                    <a href="/storage/${message.file_path}" target="_blank" class="hover:underline">Ver anexo (${fileExt.toUpperCase()})</a>
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg> 
+                    <a href="/storage/${safePath}" target="_blank" rel="noopener noreferrer" class="hover:underline">Ver anexo (${escapeHtml(fileExt.toUpperCase())})</a>
                 </div>`;
-                console.log('[DEBUG] HTML de arquivo gerado');
+                debugLog('HTML de arquivo gerado');
             }
         } else {
-            console.log('[DEBUG] Nenhum arquivo anexado');
+            debugLog('Nenhum arquivo anexado');
         }
         
         const messageDate = new Date(message.created_at);
         const timeString = messageDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        console.log('[DEBUG] Data formatada:', {
+        debugLog('Data formatada:', {
             original: message.created_at,
             parsed: messageDate.toISOString(),
             formatted: timeString
         });
+        
+        // Escape mensagem para prevenir XSS
+        const safeMessage = message.message ? escapeHtml(message.message) : '';
         
         messageDiv.innerHTML = `
             <div class="flex ${isClient ? 'justify-end' : 'justify-start'}">
@@ -686,10 +723,10 @@
                             isClient ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-sm' : 
                             'bg-white text-gray-800 border border-gray-200 rounded-bl-sm'
                         }">
-                            ${message.message ? `<p class="text-sm break-words">${message.message}</p>` : ''}
+                            ${safeMessage ? `<p class="text-sm break-words">${safeMessage}</p>` : ''}
                             ${fileHtml}
-                            <p class="text-xs mt-1.5 ${isClient ? 'text-blue-100' : 'text-gray-500'}">
-                                ${timeString}
+                            <p class="text-xs mt-1.5 ${isClient ? 'text-blue-200' : 'text-gray-500'}">
+                                ${escapeHtml(timeString)}
                             </p>
                         </div>
                     </div>
@@ -697,15 +734,15 @@
             </div>
         `;
         
-        console.log('[DEBUG] HTML da mensagem gerado, adicionando ao DOM...');
+        debugLog('HTML da mensagem gerado, adicionando ao DOM...');
         elements.chatMessages.appendChild(messageDiv);
-        console.log('[DEBUG] ✅ Mensagem adicionada ao DOM');
+        debugLog('✅ Mensagem adicionada ao DOM');
         
         scrollToBottom();
-        console.log('[DEBUG] Scroll executado');
-        console.log('[DEBUG] ========================================');
-        console.log('[DEBUG] MENSAGEM ADICIONADA COM SUCESSO');
-        console.log('[DEBUG] ========================================');
+        debugLog('Scroll executado');
+        debugLog('========================================');
+        debugLog('MENSAGEM ADICIONADA COM SUCESSO');
+        debugLog('========================================');
     }
 
     function scrollToBottom() {
@@ -713,7 +750,7 @@
         const scrollHeight = elements.chatMessages.scrollHeight;
         elements.chatMessages.scrollTop = scrollHeight;
         const afterScroll = elements.chatMessages.scrollTop;
-        console.log('[DEBUG] Scroll executado:', {
+        debugLog('Scroll executado:', {
             beforeScroll: beforeScroll,
             scrollHeight: scrollHeight,
             afterScroll: afterScroll,
@@ -723,14 +760,14 @@
 
     // ========== REVERB WEBSOCKET ==========
     
-    console.log('[DEBUG] ========================================');
-    console.log('[DEBUG] CONFIGURANDO CONEXÃO REVERB');
-    console.log('[DEBUG] ========================================');
+    debugLog('========================================');
+    debugLog('CONFIGURANDO CONEXÃO REVERB');
+    debugLog('========================================');
     
-    const roomCode = "{{ $chatRoom->room_code }}";
+    const roomCode = CHAT_CONFIG.roomCode;
     const channelName = `chat-room.${roomCode}`;
     
-    console.log('[DEBUG] Configuração do canal:', {
+    debugLog('Configuração do canal:', {
         roomCode: roomCode,
         channelName: channelName,
         echoAvailable: !!window.Echo,
@@ -743,19 +780,19 @@
     });
     
     try {
-        console.log('[DEBUG] Criando conexão com o canal...');
+        debugLog('Criando conexão com o canal...');
         const channel = window.Echo.channel(channelName);
-        console.log('[DEBUG] ✅ Canal criado:', channel);
+        debugLog('✅ Canal criado:', channel);
         
-        console.log('[DEBUG] Configurando listener para evento: .chat.message.sent');
+        debugLog('Configurando listener para evento: .chat.message.sent');
         
         channel.listen('.chat.message.sent', (event) => {
-            console.log('[DEBUG] ========================================');
-            console.log('[DEBUG] NOVA MENSAGEM RECEBIDA VIA REVERB');
-            console.log('[DEBUG] ========================================');
-            console.log('[DEBUG] Evento completo:', event);
-            console.log('[DEBUG] Timestamp:', new Date().toISOString());
-            console.log('[DEBUG] Dados do evento:', {
+            debugLog('========================================');
+            debugLog('NOVA MENSAGEM RECEBIDA VIA REVERB');
+            debugLog('========================================');
+            debugLog('Evento completo:', event);
+            debugLog('Timestamp:', new Date().toISOString());
+            debugLog('Dados do evento:', {
                 hasMessage: !!event.message,
                 messageId: event.message?.id,
                 senderType: event.message?.sender_type,
@@ -766,35 +803,37 @@
             });
             
             if (event.message) {
-                console.log('[DEBUG] Mensagem válida encontrada, processando...');
-                console.log('[DEBUG] Estado antes de adicionar:', {
+                debugLog('Mensagem válida encontrada, processando...');
+                debugLog('Estado antes de adicionar:', {
                     lastMessageId: state.lastMessageId,
                     newMessageId: event.message.id
                 });
                 
                 addMessageToChat(event.message);
                 
-                console.log('[DEBUG] ✅ Mensagem adicionada ao chat');
-                console.log('[DEBUG] Estado após adicionar:', {
+                debugLog('✅ Mensagem adicionada ao chat');
+                debugLog('Estado após adicionar:', {
                     lastMessageId: state.lastMessageId
                 });
             } else {
-                console.warn('[DEBUG] ⚠️ Evento recebido mas sem campo "message"');
-                console.warn('[DEBUG] Estrutura do evento:', Object.keys(event));
+                if (DEBUG) {
+                    console.warn('⚠️ Evento recebido mas sem campo "message"');
+                    console.warn('Estrutura do evento:', Object.keys(event));
+                }
             }
             
-            console.log('[DEBUG] ========================================');
-            console.log('[DEBUG] PROCESSAMENTO DE MENSAGEM FINALIZADO');
-            console.log('[DEBUG] ========================================');
+            debugLog('========================================');
+            debugLog('PROCESSAMENTO DE MENSAGEM FINALIZADO');
+            debugLog('========================================');
         });
         
-        console.log('[DEBUG] ✅ Listener configurado com sucesso');
-        console.log('[DEBUG] Aguardando mensagens do servidor...');
+        debugLog('✅ Listener configurado com sucesso');
+        debugLog('Aguardando mensagens do servidor...');
         
         // Verificar status da conexão
         if (window.Echo.connector && window.Echo.connector.socket) {
             const socket = window.Echo.connector.socket;
-            console.log('[DEBUG] Status da conexão WebSocket:', {
+            debugLog('Status da conexão WebSocket:', {
                 readyState: socket.readyState,
                 readyStateText: socket.readyState === 1 ? 'OPEN' : socket.readyState === 0 ? 'CONNECTING' : 'CLOSED',
                 url: socket.url || 'N/A'
@@ -802,49 +841,55 @@
             
             // Listeners de eventos do socket
             socket.onopen = function() {
-                console.log('[DEBUG] ✅ WebSocket CONECTADO');
+                debugLog('✅ WebSocket CONECTADO');
             };
             
             socket.onclose = function(event) {
-                console.warn('[DEBUG] ⚠️ WebSocket FECHADO:', {
-                    code: event.code,
-                    reason: event.reason,
-                    wasClean: event.wasClean
-                });
+                if (DEBUG) {
+                    console.warn('⚠️ WebSocket FECHADO:', {
+                        code: event.code,
+                        reason: event.reason,
+                        wasClean: event.wasClean
+                    });
+                }
             };
             
             socket.onerror = function(error) {
-                console.error('[DEBUG] ❌ Erro no WebSocket:', error);
+                console.error('❌ Erro no WebSocket:', error);
             };
             
             socket.onmessage = function(event) {
-                console.log('[DEBUG] Mensagem raw recebida do WebSocket:', event.data);
+                debugLog('Mensagem raw recebida do WebSocket:', event.data);
             };
         } else {
-            console.warn('[DEBUG] ⚠️ Socket não encontrado no Echo.connector');
+            if (DEBUG) {
+                console.warn('⚠️ Socket não encontrado no Echo.connector');
+            }
         }
         
     } catch (error) {
-        console.error('[DEBUG] ❌ ERRO ao configurar Reverb:', error);
-        console.error('[DEBUG] Tipo do erro:', error.name);
-        console.error('[DEBUG] Mensagem do erro:', error.message);
-        console.error('[DEBUG] Stack trace:', error.stack);
+        console.error('❌ ERRO ao configurar Reverb:', error);
+        if (DEBUG) {
+            console.error('Tipo do erro:', error.name);
+            console.error('Mensagem do erro:', error.message);
+            console.error('Stack trace:', error.stack);
+        }
     }
     
-    console.log('[DEBUG] ========================================');
-    console.log('[DEBUG] CONFIGURAÇÃO REVERB FINALIZADA');
-    console.log('[DEBUG] ========================================');
+    debugLog('========================================');
+    debugLog('CONFIGURAÇÃO REVERB FINALIZADA');
+    debugLog('========================================');
 
     // Initial scroll
-    console.log('[DEBUG] Executando scroll inicial...');
+    debugLog('Executando scroll inicial...');
     scrollToBottom();
     
-    console.log('[DEBUG] ========================================');
-    console.log('[DEBUG] INICIALIZAÇÃO DO CHAT COMPLETA');
-    console.log('[DEBUG] ========================================');
-    console.log('[DEBUG] Sistema pronto para enviar e receber mensagens');
-    console.log('[DEBUG] Canal Reverb:', channelName);
-    console.log('[DEBUG] ========================================');
+    debugLog('========================================');
+    debugLog('INICIALIZAÇÃO DO CHAT COMPLETA');
+    debugLog('========================================');
+    debugLog('Sistema pronto para enviar e receber mensagens');
+    debugLog('Canal Reverb:', channelName);
+    debugLog('========================================');
     
         }); // Fecha waitForEcho
     }); // Fecha waitForDOM
@@ -854,8 +899,8 @@
 // WEBSOCKET + WEBRTC - SISTEMA DE CHAMADAS
 // ============================================
 (function() {
-    const roomCode = "{{ $chatRoom->room_code }}";
-    const senderType = "{{ session('chat_user_role', 'client') }}";
+    const roomCode = CHAT_CONFIG.roomCode;
+    const senderType = CHAT_CONFIG.senderType;
     
     let webrtcManager = null;
     let callStartTime = null;
@@ -894,13 +939,13 @@
         
         // Configurar callbacks
         webrtcManager.onRemoteStream = (stream) => {
-            console.log('[Call] Stream remoto recebido');
+            debugLog('[Call] Stream remoto recebido');
             remoteVideo.srcObject = stream;
         };
         
+        // Callback único consolidado (removido duplicação)
         webrtcManager.onTransmissionModeChanged = (mode) => {
-            console.log('[Call] Modo de transmissão:', mode);
-            // Criar ou atualizar indicador de modo
+            debugLog('[Call] Modo de transmissão:', mode);
             let modeIndicator = document.getElementById('transmission-mode-indicator');
             if (!modeIndicator) {
                 modeIndicator = document.createElement('div');
@@ -909,6 +954,7 @@
                 callMaximized.querySelector('.relative')?.appendChild(modeIndicator) || 
                 callMaximized.querySelector('.flex-1')?.appendChild(modeIndicator);
             }
+            modeIndicator.classList.remove('hidden');
             modeIndicator.textContent = mode === 'webrtc' ? 'WebRTC' : 'WebSocket (Fallback)';
             modeIndicator.className = mode === 'webrtc' 
                 ? 'absolute top-4 left-4 px-3 py-1 bg-green-500 text-white rounded-lg text-xs font-medium z-10 shadow-lg'
@@ -926,7 +972,7 @@
         };
         
         webrtcManager.onCameraSwitched = (isFront) => {
-            console.log('[Call] Câmera trocada:', isFront ? 'frente' : 'trás');
+            debugLog('[Call] Câmera trocada:', isFront ? 'frente' : 'trás');
         };
         
         webrtcManager.onMinimizeToggled = (minimized) => {
@@ -943,19 +989,7 @@
             endCall();
         };
         
-        webrtcManager.onTransmissionModeChanged = (mode) => {
-            console.log('[Call] Modo de transmissão:', mode);
-            const modeIndicator = document.getElementById('transmission-mode-indicator');
-            if (modeIndicator) {
-                modeIndicator.classList.remove('hidden');
-                modeIndicator.textContent = mode === 'webrtc' ? 'WebRTC' : 'WebSocket (Fallback)';
-                modeIndicator.className = mode === 'webrtc' 
-                    ? 'absolute top-4 left-4 px-3 py-1 bg-green-500 text-white rounded-lg text-xs font-medium z-10 shadow-lg'
-                    : 'absolute top-4 left-4 px-3 py-1 bg-yellow-500 text-white rounded-lg text-xs font-medium z-10 shadow-lg animate-pulse';
-            }
-        };
-        
-        console.log('[Call] WebRTC Manager inicializado');
+        debugLog('[Call] WebRTC Manager inicializado');
     }
     
     // Iniciar chamada de vídeo
@@ -969,6 +1003,7 @@
             startCallTimer();
         } catch (error) {
             console.error('[Call] Erro ao iniciar chamada de vídeo:', error);
+            // TODO: Substituir alert por sistema de notificações
             alert('Erro ao iniciar chamada. Verifique as permissões de câmera e microfone.');
         }
     });
@@ -984,6 +1019,7 @@
             startCallTimer();
         } catch (error) {
             console.error('[Call] Erro ao iniciar chamada de voz:', error);
+            // TODO: Substituir alert por sistema de notificações
             alert('Erro ao iniciar chamada. Verifique as permissões de microfone.');
         }
     });
@@ -1013,9 +1049,11 @@
         webrtcManager?.toggleMinimize();
     });
     
-    // Encerrar chamada
+    // Encerrar chamada (com confirmação)
     endCallBtn?.addEventListener('click', () => {
-        webrtcManager?.endCall();
+        if (confirm('Deseja realmente encerrar a chamada?')) {
+            webrtcManager?.endCall();
+        }
     });
     
     // Mostrar interface de chamada
@@ -1122,63 +1160,62 @@
         }
     });
     
-    // Escutar ofertas de chamada via WebSocket
+    // Escutar ofertas de chamada via WebSocket (consolidado)
     if (window.Echo) {
         const channel = window.Echo.channel(`chat-room.${roomCode}`);
         
+        // Listener único consolidado para todos os eventos
         channel.listen('.call.signal', (event) => {
-            const { type, payload, sender_type } = event.data;
-            
-            // Ignorar sinais do próprio usuário
-            if (sender_type === senderType) return;
-            
-            // Se receber offer, mostrar notificação
-            if (type === 'offer') {
-                pendingOffer = payload;
-                incomingCallTitle.textContent = 'Chamada Recebida';
-                incomingCallSubtitle.textContent = sender_type === 'client' ? 'Cliente está chamando...' : 'Prestador está chamando...';
-                incomingCallNotification.classList.remove('hidden');
-            }
-            
-            // Processar ações de chamada
-            if (type === 'call_action') {
-                if (payload.action === 'accepted') {
-                    console.log('[Call] Chamada aceita pelo outro usuário');
-                } else if (payload.action === 'rejected') {
-                    console.log('[Call] Chamada recusada pelo outro usuário');
-                    if (callOverlay && !callOverlay.classList.contains('hidden')) {
-                        endCall();
-                    }
-                    alert('Chamada recusada pelo outro usuário');
-                } else if (payload.action === 'video_toggled') {
-                    // Sincronizar toggle de vídeo
-                    console.log('[Call] Vídeo alterado pelo outro usuário:', payload.enabled);
-                } else if (payload.action === 'audio_toggled') {
-                    // Sincronizar toggle de áudio
-                    console.log('[Call] Áudio alterado pelo outro usuário:', payload.enabled);
-                } else if (payload.action === 'camera_switched') {
-                    // Sincronizar troca de câmera
-                    console.log('[Call] Câmera trocada pelo outro usuário');
+            try {
+                const { type, payload, sender_type } = event.data;
+                
+                // Ignorar sinais do próprio usuário
+                if (sender_type === senderType) return;
+                
+                // Processar offer de chamada
+                if (type === 'offer') {
+                    pendingOffer = payload;
+                    incomingCallTitle.textContent = 'Chamada Recebida';
+                    incomingCallSubtitle.textContent = sender_type === 'client' ? 'Cliente está chamando...' : 'Prestador está chamando...';
+                    incomingCallNotification.classList.remove('hidden');
                 }
-            }
-        });
-        
-        // Escutar eventos de presença (status online) via call.signal
-        channel.listen('.call.signal', (event) => {
-            const { type, payload, sender_type } = event.data;
-            
-            if (type === 'user_presence' && sender_type !== senderType) {
-                const status = payload.status;
-                const statusIndicator = otherUserStatus?.querySelector('.w-2');
-                if (statusIndicator) {
-                    if (status === 'online') {
-                        statusIndicator.classList.remove('bg-gray-400');
-                        statusIndicator.classList.add('bg-green-400', 'animate-pulse');
-                    } else {
-                        statusIndicator.classList.remove('bg-green-400', 'animate-pulse');
-                        statusIndicator.classList.add('bg-gray-400');
+                
+                // Processar ações de chamada
+                if (type === 'call_action') {
+                    if (payload.action === 'accepted') {
+                        debugLog('[Call] Chamada aceita pelo outro usuário');
+                    } else if (payload.action === 'rejected') {
+                        debugLog('[Call] Chamada recusada pelo outro usuário');
+                        if (callOverlay && !callOverlay.classList.contains('hidden')) {
+                            endCall();
+                        }
+                        // TODO: Substituir alert por sistema de notificações
+                        alert('Chamada recusada pelo outro usuário');
+                    } else if (payload.action === 'video_toggled') {
+                        debugLog('[Call] Vídeo alterado pelo outro usuário:', payload.enabled);
+                    } else if (payload.action === 'audio_toggled') {
+                        debugLog('[Call] Áudio alterado pelo outro usuário:', payload.enabled);
+                    } else if (payload.action === 'camera_switched') {
+                        debugLog('[Call] Câmera trocada pelo outro usuário');
                     }
                 }
+                
+                // Processar eventos de presença (status online)
+                if (type === 'user_presence' && sender_type !== senderType) {
+                    const status = payload.status;
+                    const statusIndicator = otherUserStatus?.querySelector('.w-2');
+                    if (statusIndicator) {
+                        if (status === 'online') {
+                            statusIndicator.classList.remove('bg-gray-400');
+                            statusIndicator.classList.add('bg-green-400', 'animate-pulse');
+                        } else {
+                            statusIndicator.classList.remove('bg-green-400', 'animate-pulse');
+                            statusIndicator.classList.add('bg-gray-400');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('[Call] Erro ao processar sinal:', error);
             }
         });
     }
@@ -1215,14 +1252,21 @@
             sendPresence('offline');
         });
     } else {
-        // Aguardar Echo
+        // Aguardar Echo (usando Promise com timeout)
+        let attempts = 0;
+        const maxAttempts = CONFIG.MAX_ECHO_ATTEMPTS;
+        
         const checkEcho = setInterval(() => {
+            attempts++;
             if (window.Echo) {
                 clearInterval(checkEcho);
                 sendPresence('online');
                 initWebRTC();
+            } else if (attempts >= maxAttempts) {
+                clearInterval(checkEcho);
+                console.error('Echo não disponível após', maxAttempts * CONFIG.ECHO_CHECK_INTERVAL, 'ms');
             }
-        }, 100);
+        }, CONFIG.ECHO_CHECK_INTERVAL);
     }
 })();
 </script>
