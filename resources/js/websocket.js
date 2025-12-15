@@ -48,6 +48,9 @@ console.log('[Echo] Configurando Laravel Echo com Reverb:', {
 // Reverb implementa o protocolo Pusher, então o Echo fala protocolo Pusher
 if (reverbKey && reverbHost) {
     try {
+        // Obter CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        
         // Configuração base do Echo
         const echoConfig = {
             broadcaster: 'pusher', // ✅ CORRETO: sempre 'pusher', mesmo com Reverb
@@ -60,10 +63,68 @@ if (reverbKey && reverbHost) {
             authEndpoint: '/broadcasting/auth', // Endpoint para autorização de canais privados
             auth: {
                 headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
                 }
+            },
+            // Usar authorizer customizado para garantir que cookies sejam enviados
+            authorizer: (channel, options) => {
+                return {
+                    authorize: (socketId, callback) => {
+                        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                        
+                        console.log('[Echo] Autorizando canal:', {
+                            channel: channel.name,
+                            socketId: socketId,
+                            hasCsrfToken: !!csrfToken
+                        });
+                        
+                        fetch('/broadcasting/auth', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': csrfToken,
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'application/json',
+                            },
+                            credentials: 'same-origin', // IMPORTANTE: Envia cookies de sessão
+                            body: JSON.stringify({
+                                socket_id: socketId,
+                                channel_name: channel.name
+                            })
+                        })
+                        .then(response => {
+                            console.log('[Echo] Resposta da autorização:', {
+                                status: response.status,
+                                ok: response.ok
+                            });
+                            
+                            if (!response.ok) {
+                                return response.json().then(data => {
+                                    throw new Error(`HTTP ${response.status}: ${JSON.stringify(data)}`);
+                                });
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            console.log('[Echo] ✅ Autorização bem-sucedida');
+                            callback(null, data);
+                        })
+                        .catch(error => {
+                            console.error('[Echo] ❌ Erro na autorização:', error);
+                            callback(error, null);
+                        });
+                    }
+                };
             }
         };
+        
+        console.log('[Echo] Configuração de autenticação:', {
+            hasAuthorizer: !!echoConfig.authorizer,
+            hasCsrfToken: !!csrfToken,
+            csrfTokenLength: csrfToken.length,
+        });
 
         // Em produção HTTPS (porta 443), não especificamos porta (usa padrão 443)
         // Em desenvolvimento ou porta customizada, especificamos a porta

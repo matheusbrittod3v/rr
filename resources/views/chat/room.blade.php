@@ -165,9 +165,24 @@
         'roomCode' => $chatRoom->room_code,
         'senderType' => session('chat_user_role', 'client'),
     ];
+    
+    // Debug: verificar sessão
+    \Log::info('Carregando página do chat', [
+        'roomCode' => $chatRoom->room_code,
+        'senderType' => session('chat_user_role', 'client'),
+        'authenticatedRoom' => session('authenticated_chat_room'),
+        'sessionId' => session()->getId(),
+    ]);
 @endphp
 
 const CHAT_CONFIG = @json($chatConfig);
+
+// Debug no console
+console.log('[Chat] Configuração:', CHAT_CONFIG);
+console.log('[Chat] Sessão no servidor:', {
+    senderType: @json(session('chat_user_role', 'client')),
+    authenticatedRoom: @json(session('authenticated_chat_room')),
+});
 
 // ========== CONFIGURAÇÃO DO CHAT ==========
 let privateChannel = null;
@@ -294,17 +309,31 @@ function initializeChat() {
                 console.error('[Chat] Detalhes do erro:', {
                     status: error.status,
                     error: error.error,
-                    message: error.message
+                    message: error.message,
+                    type: error.type
+                });
+                console.error('[Chat] Configuração atual:', {
+                    roomCode: CHAT_CONFIG.roomCode,
+                    senderType: CHAT_CONFIG.senderType,
+                    channelName: channelName
                 });
                 
                 // Atualizar indicador de status
                 const statusIndicator = document.getElementById('connection-status-indicator');
                 if (statusIndicator) {
-                    statusIndicator.classList.remove('bg-yellow-400', 'bg-green-400');
+                    statusIndicator.classList.remove('bg-yellow-400', 'bg-green-400', 'animate-pulse');
                     statusIndicator.classList.add('bg-red-400');
                 }
                 
-                alert('Erro ao autorizar acesso ao chat. Verifique se você está autenticado corretamente.');
+                // Mensagem de erro mais específica
+                let errorMessage = 'Erro ao autorizar acesso ao chat.';
+                if (error.status === 403) {
+                    errorMessage = 'Acesso negado (403). Verifique se você está autenticado corretamente. Tente fazer login novamente.';
+                } else if (error.status === 401) {
+                    errorMessage = 'Não autorizado (401). Sua sessão pode ter expirado. Tente fazer login novamente.';
+                }
+                
+                alert(errorMessage);
                 isConnected = false;
             });
             
