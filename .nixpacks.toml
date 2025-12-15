@@ -2,7 +2,7 @@
 nixPkgs = [
   "php83",
   "php83Packages.composer",
-  "nodejs_20",
+  "nodejs_18",
   "nginx"
 ]
 
