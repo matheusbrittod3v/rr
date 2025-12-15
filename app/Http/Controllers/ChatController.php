@@ -169,10 +169,19 @@ class ChatController extends Controller
         }
 
         $request->validate([
-            'type' => 'required|string|in:offer,answer,candidate,bye,media_frame',
+            'type' => 'required|string|in:offer,answer,candidate,bye,media_frame,call_action,user_presence',
             'payload' => 'required',
             'sender_type' => 'required|string|in:client,provider',
         ]);
+        
+        // Para tipos offer/answer, payload pode ser objeto complexo (SDP)
+        // Para outros tipos, validar conforme necessário
+        if (in_array($request->type, ['offer', 'answer']) && is_array($request->payload)) {
+            // Validar estrutura básica do SDP
+            if (!isset($request->payload['type']) || !isset($request->payload['sdp'])) {
+                return response()->json(['error' => 'Invalid SDP structure'], 422);
+            }
+        }
 
         $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
 

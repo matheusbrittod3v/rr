@@ -19,9 +19,14 @@
                         </div>
                         <div>
                             <h1 class="text-white font-bold text-lg">Chat de Atendimento</h1>
-                            <p class="text-blue-100 text-sm flex items-center">
-                                <span class="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
-                                Online
+                            <p class="text-blue-100 text-sm flex items-center space-x-2">
+                                <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                                <span>Você: {{ session('chat_user_role', 'client') === 'client' ? 'Cliente' : 'Prestador' }}</span>
+                                <span class="mx-1">•</span>
+                                <span id="other-user-status" class="flex items-center">
+                                    <span class="w-2 h-2 bg-gray-400 rounded-full mr-1"></span>
+                                    <span id="other-user-name">{{ session('chat_user_role', 'client') === 'client' ? 'Prestador' : 'Cliente' }}</span>
+                                </span>
                             </p>
                         </div>
                     </div>
@@ -128,6 +133,35 @@
     </div>
 </div>
 
+<!-- Notificação de Chamada Recebida -->
+<div id="incoming-call-notification" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 animate-scale-in">
+        <div class="text-center">
+            <div class="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+            </div>
+            <h3 class="text-2xl font-bold text-gray-900 mb-2" id="incoming-call-title">Chamada Recebida</h3>
+            <p class="text-gray-600 mb-6" id="incoming-call-subtitle">Deseja aceitar esta chamada?</p>
+            <div class="flex items-center justify-center space-x-4">
+                <button id="reject-call-btn" class="px-6 py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all font-medium flex items-center space-x-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <span>Recusar</span>
+                </button>
+                <button id="accept-call-btn" class="px-6 py-3 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-all font-medium flex items-center space-x-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Aceitar</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Interface de Chamada (Overlay) -->
 <div id="call-overlay" class="hidden fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center">
     <!-- Chamada Minimizada -->
@@ -213,6 +247,21 @@
 </div>
 
 <style>
+    @keyframes scale-in {
+        from {
+            opacity: 0;
+            transform: scale(0.9);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+    
+    .animate-scale-in {
+        animation: scale-in 0.3s ease-out;
+    }
+    
     @keyframes fade-in {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
@@ -1013,6 +1062,66 @@
         callDuration.textContent = '00:00';
     }
     
+    // Elementos de notificação
+    const incomingCallNotification = document.getElementById('incoming-call-notification');
+    const acceptCallBtn = document.getElementById('accept-call-btn');
+    const rejectCallBtn = document.getElementById('reject-call-btn');
+    const incomingCallTitle = document.getElementById('incoming-call-title');
+    const incomingCallSubtitle = document.getElementById('incoming-call-subtitle');
+    const otherUserStatus = document.getElementById('other-user-status');
+    const otherUserName = document.getElementById('other-user-name');
+    
+    let pendingOffer = null;
+    
+    // Aceitar chamada
+    acceptCallBtn?.addEventListener('click', async () => {
+        incomingCallNotification.classList.add('hidden');
+        
+        if (pendingOffer) {
+            try {
+                if (!webrtcManager) initWebRTC();
+                
+                await webrtcManager.acceptCall(pendingOffer);
+                showCallInterface();
+                localVideo.srcObject = webrtcManager.localStream;
+                startCallTimer();
+                
+                // Enviar ação de aceitar via WebSocket
+                webrtcManager.sendSignal('call_action', {
+                    action: 'accepted',
+                    timestamp: Date.now()
+                });
+            } catch (error) {
+                console.error('[Call] Erro ao aceitar chamada:', error);
+                alert('Erro ao aceitar chamada. Tente novamente.');
+            }
+            pendingOffer = null;
+        }
+    });
+    
+    // Recusar chamada
+    rejectCallBtn?.addEventListener('click', () => {
+        incomingCallNotification.classList.add('hidden');
+        
+        if (pendingOffer) {
+            // Enviar ação de recusar via WebSocket
+            if (webrtcManager) {
+                webrtcManager.sendSignal('call_action', {
+                    action: 'rejected',
+                    timestamp: Date.now()
+                });
+            } else {
+                // Se não tem manager ainda, criar temporariamente para enviar sinal
+                const tempManager = new WebRTCManager(roomCode, senderType);
+                tempManager.sendSignal('call_action', {
+                    action: 'rejected',
+                    timestamp: Date.now()
+                });
+            }
+            pendingOffer = null;
+        }
+    });
+    
     // Escutar ofertas de chamada via WebSocket
     if (window.Echo) {
         const channel = window.Echo.channel(`chat-room.${roomCode}`);
@@ -1023,28 +1132,94 @@
             // Ignorar sinais do próprio usuário
             if (sender_type === senderType) return;
             
-            // Se receber offer, aceitar automaticamente
-            if (type === 'offer' && !webrtcManager) {
-                initWebRTC();
-                webrtcManager.acceptCall(payload).then(() => {
-                    showCallInterface();
-                    localVideo.srcObject = webrtcManager.localStream;
-                    startCallTimer();
-                }).catch(error => {
-                    console.error('[Call] Erro ao aceitar chamada:', error);
-                });
+            // Se receber offer, mostrar notificação
+            if (type === 'offer') {
+                pendingOffer = payload;
+                incomingCallTitle.textContent = 'Chamada Recebida';
+                incomingCallSubtitle.textContent = sender_type === 'client' ? 'Cliente está chamando...' : 'Prestador está chamando...';
+                incomingCallNotification.classList.remove('hidden');
+            }
+            
+            // Processar ações de chamada
+            if (type === 'call_action') {
+                if (payload.action === 'accepted') {
+                    console.log('[Call] Chamada aceita pelo outro usuário');
+                } else if (payload.action === 'rejected') {
+                    console.log('[Call] Chamada recusada pelo outro usuário');
+                    if (callOverlay && !callOverlay.classList.contains('hidden')) {
+                        endCall();
+                    }
+                    alert('Chamada recusada pelo outro usuário');
+                } else if (payload.action === 'video_toggled') {
+                    // Sincronizar toggle de vídeo
+                    console.log('[Call] Vídeo alterado pelo outro usuário:', payload.enabled);
+                } else if (payload.action === 'audio_toggled') {
+                    // Sincronizar toggle de áudio
+                    console.log('[Call] Áudio alterado pelo outro usuário:', payload.enabled);
+                } else if (payload.action === 'camera_switched') {
+                    // Sincronizar troca de câmera
+                    console.log('[Call] Câmera trocada pelo outro usuário');
+                }
+            }
+        });
+        
+        // Escutar eventos de presença (status online) via call.signal
+        channel.listen('.call.signal', (event) => {
+            const { type, payload, sender_type } = event.data;
+            
+            if (type === 'user_presence' && sender_type !== senderType) {
+                const status = payload.status;
+                const statusIndicator = otherUserStatus?.querySelector('.w-2');
+                if (statusIndicator) {
+                    if (status === 'online') {
+                        statusIndicator.classList.remove('bg-gray-400');
+                        statusIndicator.classList.add('bg-green-400', 'animate-pulse');
+                    } else {
+                        statusIndicator.classList.remove('bg-green-400', 'animate-pulse');
+                        statusIndicator.classList.add('bg-gray-400');
+                    }
+                }
             }
         });
     }
     
-    // Inicializar quando Echo estiver pronto
+    // Enviar status de presença quando entrar na sala
+    function sendPresence(status) {
+        if (!window.Echo) return;
+        
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        fetch(`/chat/${roomCode}/call-signal`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                type: 'user_presence',
+                payload: { status: status },
+                sender_type: senderType
+            })
+        }).catch(error => {
+            console.error('[Presence] Erro ao enviar status:', error);
+        });
+    }
+    
+    // Enviar presença online ao carregar
     if (window.Echo) {
+        sendPresence('online');
         initWebRTC();
+        
+        // Enviar presença offline ao sair
+        window.addEventListener('beforeunload', () => {
+            sendPresence('offline');
+        });
     } else {
         // Aguardar Echo
         const checkEcho = setInterval(() => {
             if (window.Echo) {
                 clearInterval(checkEcho);
+                sendPresence('online');
                 initWebRTC();
             }
         }, 100);

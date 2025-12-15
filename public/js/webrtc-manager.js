@@ -67,6 +67,49 @@ class WebRTCManager {
     }
     
     /**
+     * Limpar SDP removendo linhas inválidas
+     */
+    cleanSDP(sdp) {
+        if (typeof sdp !== 'string') {
+            return sdp;
+        }
+        
+        // Remover linhas inválidas do SDP
+        const lines = sdp.split(/\r?\n/);
+        const cleanedLines = [];
+        
+        for (let line of lines) {
+            // Remover linhas vazias
+            if (!line || line.trim() === '') {
+                cleanedLines.push('');
+                continue;
+            }
+            
+            // Corrigir linhas msid inválidas
+            // Formato esperado: a=ssrc:123 msid:stream-id track-id
+            // Problema: às vezes vem com múltiplos msid na mesma linha
+            if (line.startsWith('a=ssrc:') && line.includes('msid:')) {
+                const parts = line.split(' ');
+                if (parts.length > 3) {
+                    // Pegar apenas ssrc, primeiro msid e primeiro track-id
+                    const ssrcPart = parts[0];
+                    const msidIndex = parts.findIndex(p => p.startsWith('msid:'));
+                    if (msidIndex !== -1 && msidIndex + 1 < parts.length) {
+                        line = `${ssrcPart} ${parts[msidIndex]} ${parts[msidIndex + 1]}`;
+                    } else {
+                        // Se não encontrar msid válido, manter apenas ssrc
+                        line = ssrcPart;
+                    }
+                }
+            }
+            
+            cleanedLines.push(line);
+        }
+        
+        return cleanedLines.join('\r\n');
+    }
+    
+    /**
      * Configurar listeners do WebSocket para sinalização
      */
     setupEventListeners() {
@@ -143,7 +186,25 @@ class WebRTCManager {
             });
             
             // Processar offer recebido
-            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            // Garantir que offer está no formato correto
+            let offerDesc = offer;
+            if (typeof offer === 'object' && offer.type && offer.sdp) {
+                offerDesc = offer;
+            } else if (typeof offer === 'string') {
+                // Se for string, tentar parsear como JSON
+                try {
+                    offerDesc = JSON.parse(offer);
+                } catch (e) {
+                    throw new Error('Invalid offer format');
+                }
+            }
+            
+            // Limpar SDP se necessário (remover linhas inválidas)
+            if (offerDesc.sdp) {
+                offerDesc.sdp = this.cleanSDP(offerDesc.sdp);
+            }
+            
+            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offerDesc));
             
             // Criar e enviar answer
             const answer = await this.peerConnection.createAnswer();
@@ -542,7 +603,24 @@ class WebRTCManager {
                     
                 case 'answer':
                     if (this.peerConnection) {
-                        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(payload));
+                        let answerDesc = payload;
+                        if (typeof payload === 'object' && payload.type && payload.sdp) {
+                            answerDesc = payload;
+                        } else if (typeof payload === 'string') {
+                            try {
+                                answerDesc = JSON.parse(payload);
+                            } catch (e) {
+                                console.error('[WebRTC] Erro ao parsear answer:', e);
+                                return;
+                            }
+                        }
+                        
+                        // Limpar SDP se necessário
+                        if (answerDesc.sdp) {
+                            answerDesc.sdp = this.cleanSDP(answerDesc.sdp);
+                        }
+                        
+                        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answerDesc));
                     }
                     break;
                     
@@ -610,6 +688,13 @@ class WebRTCManager {
             this.isVideoEnabled = !this.isVideoEnabled;
             videoTrack.enabled = this.isVideoEnabled;
             this.onVideoToggled(this.isVideoEnabled);
+            
+            // Sincronizar ação via WebSocket
+            this.sendSignal('call_action', {
+                action: 'video_toggled',
+                enabled: this.isVideoEnabled,
+                timestamp: Date.now()
+            });
         }
     }
     
@@ -624,6 +709,13 @@ class WebRTCManager {
             this.isAudioEnabled = !this.isAudioEnabled;
             audioTrack.enabled = this.isAudioEnabled;
             this.onAudioToggled(this.isAudioEnabled);
+            
+            // Sincronizar ação via WebSocket
+            this.sendSignal('call_action', {
+                action: 'audio_toggled',
+                enabled: this.isAudioEnabled,
+                timestamp: Date.now()
+            });
         }
     }
     
@@ -666,6 +758,13 @@ class WebRTCManager {
             this.localStream.addTrack(newVideoTrack);
             
             this.onCameraSwitched(this.isFrontCamera);
+            
+            // Sincronizar ação via WebSocket
+            this.sendSignal('call_action', {
+                action: 'camera_switched',
+                isFront: this.isFrontCamera,
+                timestamp: Date.now()
+            });
         } catch (error) {
             console.error('[WebRTC] Erro ao trocar câmera:', error);
         }
