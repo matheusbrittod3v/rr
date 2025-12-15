@@ -20,10 +20,13 @@
                         <div>
                             <h1 class="text-white font-bold text-lg">Chat de Atendimento</h1>
                             <p class="text-blue-100 text-sm flex items-center space-x-2">
-                                <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                                <span id="connection-status-indicator" class="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></span>
                                 <span>Você: {{ session('chat_user_role', 'client') === 'client' ? 'Cliente' : 'Prestador' }}</span>
                                 <span class="mx-1">•</span>
-                                <span>{{ session('chat_user_role', 'client') === 'client' ? 'Prestador' : 'Cliente' }}</span>
+                                <span id="other-user-status" class="flex items-center">
+                                    <span class="w-2 h-2 bg-gray-400 rounded-full mr-1"></span>
+                                    <span>{{ session('chat_user_role', 'client') === 'client' ? 'Prestador' : 'Cliente' }}</span>
+                                </span>
                             </p>
                         </div>
                     </div>
@@ -262,31 +265,75 @@ function initializeChat() {
         const channelName = `private-chat-room.${roomCode}`;
         
         console.log('[Chat] Conectando ao canal:', channelName);
+        console.log('[Chat] Configuração:', {
+            roomCode: roomCode,
+            senderType: CHAT_CONFIG.senderType,
+            channelName: channelName
+        });
         
         try {
             // Criar canal privado
             privateChannel = window.Echo.private(channelName);
             
+            // Listener para quando o canal é autorizado e subscrito
+            privateChannel.subscribed(() => {
+                console.log('[Chat] ✅ Canal autorizado e subscrito com sucesso!');
+                isConnected = true;
+                
+                // Atualizar indicador de status
+                const statusIndicator = document.getElementById('connection-status-indicator');
+                if (statusIndicator) {
+                    statusIndicator.classList.remove('bg-yellow-400', 'bg-red-400');
+                    statusIndicator.classList.add('bg-green-400');
+                }
+            });
+            
+            // Listener para erro de autorização
+            privateChannel.error((error) => {
+                console.error('[Chat] ❌ Erro ao autorizar canal:', error);
+                console.error('[Chat] Detalhes do erro:', {
+                    status: error.status,
+                    error: error.error,
+                    message: error.message
+                });
+                
+                // Atualizar indicador de status
+                const statusIndicator = document.getElementById('connection-status-indicator');
+                if (statusIndicator) {
+                    statusIndicator.classList.remove('bg-yellow-400', 'bg-green-400');
+                    statusIndicator.classList.add('bg-red-400');
+                }
+                
+                alert('Erro ao autorizar acesso ao chat. Verifique se você está autenticado corretamente.');
+                isConnected = false;
+            });
+            
             // Listener para receber mensagens via whisper
             privateChannel.listenForWhisper('client-chat-message', (data) => {
                 console.log('[Chat] Mensagem recebida via whisper:', data);
+                console.log('[Chat] Comparando sender_type:', {
+                    received: data.sender_type,
+                    current: CHAT_CONFIG.senderType,
+                    match: data.sender_type === CHAT_CONFIG.senderType
+                });
                 
                 // Ignorar mensagens do próprio usuário
                 if (data.sender_type === CHAT_CONFIG.senderType) {
+                    console.log('[Chat] Mensagem ignorada (próprio usuário)');
                     return;
                 }
                 
                 // Adicionar mensagem ao chat
+                console.log('[Chat] Adicionando mensagem ao chat');
                 addMessageToChat(data.message, data.sender_type);
             });
             
-            // Listener para status de conexão
+            // Listener para status de conexão WebSocket
             if (window.Echo.connector && window.Echo.connector.pusher) {
                 const pusher = window.Echo.connector.pusher;
                 
                 pusher.connection.bind('connected', () => {
                     console.log('[Chat] ✅ WebSocket CONECTADO');
-                    isConnected = true;
                 });
                 
                 pusher.connection.bind('disconnected', () => {
@@ -295,16 +342,20 @@ function initializeChat() {
                 });
                 
                 pusher.connection.bind('error', (error) => {
-                    console.error('[Chat] ❌ Erro na conexão:', error);
+                    console.error('[Chat] ❌ Erro na conexão WebSocket:', error);
                     isConnected = false;
+                });
+                
+                pusher.connection.bind('state_change', (states) => {
+                    console.log('[Chat] Estado da conexão:', states.previous, '->', states.current);
                 });
             }
             
-            console.log('[Chat] ✅ Chat inicializado com sucesso!');
-            isConnected = true;
+            console.log('[Chat] ✅ Chat inicializado! Aguardando autorização do canal...');
             
         } catch (error) {
             console.error('[Chat] ❌ Erro ao inicializar chat:', error);
+            console.error('[Chat] Stack trace:', error.stack);
             alert('Erro ao conectar ao chat. Recarregue a página.');
         }
     });
@@ -319,9 +370,15 @@ async function sendMessage() {
         return;
     }
     
-    if (!isConnected || !privateChannel) {
+    if (!privateChannel) {
+        console.error('[Chat] Canal privado não disponível');
         alert('Não conectado ao chat. Aguarde a conexão...');
         return;
+    }
+    
+    // Verificar se o canal está subscrito
+    if (!isConnected) {
+        console.warn('[Chat] Canal ainda não está autorizado. Tentando enviar mesmo assim...');
     }
     
     // Desabilitar botão durante envio
@@ -329,15 +386,19 @@ async function sendMessage() {
     elements.sendButton.classList.add('opacity-50', 'cursor-not-allowed');
     
     try {
-        // Enviar mensagem via whisper (client event)
-        privateChannel.whisper('client-chat-message', {
+        const messageData = {
             room_code: CHAT_CONFIG.roomCode,
             message: message,
             sender_type: CHAT_CONFIG.senderType,
             timestamp: Date.now(),
-        });
+        };
         
-        console.log('[Chat] Mensagem enviada via whisper:', message);
+        console.log('[Chat] Enviando mensagem via whisper:', messageData);
+        
+        // Enviar mensagem via whisper (client event)
+        privateChannel.whisper('client-chat-message', messageData);
+        
+        console.log('[Chat] ✅ Mensagem enviada via whisper');
         
         // Adicionar mensagem localmente (otimista)
         addMessageToChat(message, CHAT_CONFIG.senderType);
@@ -349,6 +410,7 @@ async function sendMessage() {
         
     } catch (error) {
         console.error('[Chat] ❌ Erro ao enviar mensagem:', error);
+        console.error('[Chat] Stack trace:', error.stack);
         alert('Erro ao enviar mensagem. Tente novamente.');
     } finally {
         // Reabilitar botão

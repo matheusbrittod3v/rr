@@ -57,6 +57,12 @@ if (reverbKey && reverbHost) {
             enabledTransports: ['ws', 'wss'],
             disableStats: true, // Desabilita estatísticas do Pusher (não necessário para Reverb)
             cluster: 'mt1', // Cluster padrão (ignorado quando wsHost é customizado, mas necessário para Pusher.js)
+            authEndpoint: '/broadcasting/auth', // Endpoint para autorização de canais privados
+            auth: {
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                }
+            }
         };
 
         // Em produção HTTPS (porta 443), não especificamos porta (usa padrão 443)

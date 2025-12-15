@@ -9,11 +9,15 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RegistrationLinkController;
 use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\WhatsApiController;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index']);
 
 Route::get('/sitemap.xml', [SitemapController::class, 'index']);
+
+// Rotas de broadcasting para autorização de canais privados
+Broadcast::routes(['middleware' => ['web']]);
 
 // Registration Link Routes
 Route::get('/register/{token}', [RegistrationLinkController::class, 'showRegistrationForm'])->name('register.show');

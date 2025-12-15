@@ -17,10 +17,21 @@ use Illuminate\Support\Facades\Broadcast;
 Broadcast::channel('private-chat-room.{roomCode}', function ($user, $roomCode) {
     // Verificar se o usuário está autenticado na sala via sessão
     // Como não temos autenticação Laravel padrão, vamos permitir baseado na sessão
-    if (session('authenticated_chat_room') === $roomCode) {
+    $authenticatedRoom = session('authenticated_chat_room');
+    $userRole = session('chat_user_role', 'client');
+    
+    // Log para debug
+    \Log::info('Autorizando canal privado', [
+        'roomCode' => $roomCode,
+        'authenticatedRoom' => $authenticatedRoom,
+        'userRole' => $userRole,
+        'match' => $authenticatedRoom === $roomCode,
+    ]);
+    
+    if ($authenticatedRoom === $roomCode) {
         return [
-            'id' => session('chat_user_role', 'client'),
-            'role' => session('chat_user_role', 'client'),
+            'id' => $userRole,
+            'role' => $userRole,
         ];
     }
     
