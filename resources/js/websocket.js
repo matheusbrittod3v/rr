@@ -21,7 +21,9 @@ const reverbPort = import.meta.env.VITE_REVERB_PORT ?? '8080';
 const reverbScheme = import.meta.env.VITE_REVERB_SCHEME ?? 'http';
 
 // Converter porta para número
-const port = parseInt(reverbPort, 10) || 8080;
+// Em produção com HTTPS (porta 443), não especificamos porta (usa padrão)
+const isProductionHTTPS = reverbScheme === 'https' && (reverbPort === '443' || reverbPort === '');
+const port = isProductionHTTPS ? null : (parseInt(reverbPort, 10) || 8080);
 const useTLS = reverbScheme === 'https';
 
 console.log('[Echo] Configurando Laravel Echo com Reverb:', {
@@ -37,21 +39,31 @@ console.log('[Echo] Configurando Laravel Echo com Reverb:', {
 // Reverb implementa o protocolo Pusher, então o Echo fala protocolo Pusher
 if (reverbKey && reverbHost) {
     try {
-        window.Echo = new Echo({
+        // Configuração base do Echo
+        const echoConfig = {
             broadcaster: 'pusher', // ✅ CORRETO: sempre 'pusher', mesmo com Reverb
             key: reverbKey,
             wsHost: reverbHost,
-            wsPort: port,
-            wssPort: port,
             forceTLS: useTLS,
             enabledTransports: ['ws', 'wss'],
             disableStats: true, // Desabilita estatísticas do Pusher (não necessário para Reverb)
             cluster: 'mt1', // Cluster padrão (ignorado quando wsHost é customizado, mas necessário para Pusher.js)
-        });
+        };
+
+        // Em produção HTTPS (porta 443), não especificamos porta (usa padrão 443)
+        // Em desenvolvimento ou porta customizada, especificamos a porta
+        if (!isProductionHTTPS) {
+            echoConfig.wsPort = port;
+            echoConfig.wssPort = port;
+        }
+
+        window.Echo = new Echo(echoConfig);
 
         console.log('[Echo] ✅ Laravel Echo inicializado com sucesso!');
         console.log('[Echo] Broadcaster: pusher (conectando ao Reverb)');
-        console.log('[Echo] Conectando em:', `${reverbScheme}://${reverbHost}:${port}`);
+        console.log('[Echo] Conectando em:', isProductionHTTPS 
+            ? `${reverbScheme}://${reverbHost}` 
+            : `${reverbScheme}://${reverbHost}:${port}`);
     } catch (error) {
         console.error('[Echo] ❌ Erro ao inicializar Echo:', error);
         console.error('[Echo] Detalhes do erro:', error.message, error.stack);

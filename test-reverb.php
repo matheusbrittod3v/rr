@@ -9,7 +9,7 @@ $REVERB_APP_KEY    = 'sdfghjkhgfdfghjkhgfghjk';
 $REVERB_APP_SECRET = 'dfghjkrtyuijhgfghjklkjhgfghjkjhgh';
 $REVERB_HOST       = 'renttool.store';
 $REVERB_PORT       = 8082;
-$REVERB_SCHEME     = 'https'; // http ou https
+$REVERB_SCHEME     = 'http'; // http ou https
 
 $endpoint = "{$REVERB_SCHEME}://{$REVERB_HOST}:{$REVERB_PORT}/apps/{$REVERB_APP_ID}/events";
 
