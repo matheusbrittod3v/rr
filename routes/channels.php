@@ -21,27 +21,43 @@ Broadcast::channel('chat-room.{roomCode}', function ($user, $roomCode) {
     
     // Verificar se tem sessão
     if (!$request->hasSession()) {
-        \Log::warning('Broadcast: Sem sessão', ['roomCode' => $roomCode]);
+        \Log::warning('Broadcast: Sem sessão', [
+            'roomCode' => $roomCode,
+            'hasSession' => false,
+            'sessionId' => null,
+        ]);
         return false;
     }
     
     $session = $request->session();
     
+    // Garantir que a sessão está iniciada
+    if (!$session->isStarted()) {
+        $session->start();
+    }
+    
     // Verificar se a sessão tem os dados corretos
     $authenticatedRoom = $session->get('authenticated_chat_room');
     $userRole = $session->get('chat_user_role');
     
+    // Log detalhado para debug
     \Log::info('Broadcast: Verificando autorização', [
         'roomCode' => $roomCode,
+        'sessionId' => $session->getId(),
         'authenticatedRoom' => $authenticatedRoom,
         'userRole' => $userRole,
         'match' => $authenticatedRoom === $roomCode,
         'hasRole' => !empty($userRole),
+        'allSessionKeys' => array_keys($session->all()),
     ]);
     
     // Se a sala autenticada na sessão corresponde à sala do canal, autorizar
     if ($authenticatedRoom === $roomCode && $userRole) {
-        \Log::info('Broadcast: Autorizado', ['roomCode' => $roomCode, 'userRole' => $userRole]);
+        \Log::info('Broadcast: Autorizado', [
+            'roomCode' => $roomCode,
+            'userRole' => $userRole,
+            'sessionId' => $session->getId(),
+        ]);
         return [
             'id' => $userRole,
             'role' => $userRole,
@@ -50,8 +66,10 @@ Broadcast::channel('chat-room.{roomCode}', function ($user, $roomCode) {
     
     \Log::warning('Broadcast: Negado', [
         'roomCode' => $roomCode,
+        'sessionId' => $session->getId(),
         'authenticatedRoom' => $authenticatedRoom,
         'userRole' => $userRole,
+        'allSessionKeys' => array_keys($session->all()),
     ]);
     
     return false;
