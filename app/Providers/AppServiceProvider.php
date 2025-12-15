@@ -31,7 +31,7 @@ class AppServiceProvider extends ServiceProvider
         // Força HTTPS sempre em produção OU quando detectar que está atrás de proxy HTTPS
         $forceHttps = false;
         
-        if (env('APP_ENV') === 'local') {
+        if (env('APP_ENV') === 'production') {
             $forceHttps = true;
         }
         
