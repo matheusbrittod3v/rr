@@ -263,7 +263,8 @@ function initializeChat() {
     
     waitForEcho(function() {
         const roomCode = CHAT_CONFIG.roomCode;
-        const channelName = `private-chat-room.${roomCode}`;
+        // IMPORTANTE: Laravel adiciona automaticamente o prefixo "private-", então não inclua
+        const channelName = `chat-room.${roomCode}`;
         
         console.log('[Chat] Conectando ao canal:', channelName);
         console.log('[Chat] Configuração:', {
@@ -273,7 +274,7 @@ function initializeChat() {
         });
         
         try {
-            // Criar canal privado
+            // Criar canal privado (Laravel adiciona automaticamente o prefixo "private-")
             privateChannel = window.Echo.private(channelName);
             
             // Listener para quando o canal é autorizado e subscrito

@@ -15,7 +15,8 @@ use Illuminate\Support\Facades\Broadcast;
 
 // Canal privado para chat rooms
 // Autorização simples baseada apenas na sessão (sem verificar autenticação Laravel/Filament)
-Broadcast::channel('private-chat-room.{roomCode}', function ($user, $roomCode) {
+// IMPORTANTE: Laravel adiciona automaticamente o prefixo "private-", então não inclua no nome
+Broadcast::channel('chat-room.{roomCode}', function ($user, $roomCode) {
     $request = request();
     
     // Verificar se tem sessão
