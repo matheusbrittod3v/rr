@@ -463,7 +463,13 @@ function debugLog(...args) {
         // Verificar se o canal privado está disponível
         if (!privateChannel) {
             console.error('❌ Canal privado não disponível');
-            alert('Erro: não conectado ao chat. Recarregue a página.');
+            if (window.toastNotification) {
+                window.toastNotification.error('Não conectado ao chat. Tentando reconectar...', 5000);
+            } else {
+                alert('Erro: não conectado ao chat. Recarregue a página.');
+            }
+            // Tentar reconectar
+            attemptReconnect();
             return;
         }
 
@@ -555,11 +561,24 @@ function debugLog(...args) {
                 
                 if (processData.success) {
                     debugLog('✅ Mensagem processada no backend!');
+                    if (window.toastNotification) {
+                        window.toastNotification.success('Mensagem enviada!', 2000);
+                    }
                 } else {
                     console.error('❌ Erro ao processar mensagem:', processData);
+                    const errorMsg = processData.error || 'Erro ao enviar mensagem. Tente novamente.';
+                    if (window.toastNotification) {
+                        window.toastNotification.error(errorMsg, 5000);
+                    }
+                    throw new Error(errorMsg);
                 }
             } catch (processError) {
                 console.error('❌ Erro ao processar mensagem no backend:', processError);
+                const errorMsg = processError.message || 'Erro ao processar mensagem. Verifique sua conexão.';
+                if (window.toastNotification) {
+                    window.toastNotification.error(errorMsg, 5000);
+                }
+                throw processError;
             }
             
             debugLog('✅ Mensagem enviada via WebSocket e processada!');
@@ -583,7 +602,21 @@ function debugLog(...args) {
                 console.error('Mensagem do erro:', error.message);
                 console.error('Stack trace:', error.stack);
             }
-            alert('Erro ao enviar mensagem. Verifique sua conexão e tente novamente.');
+            
+            // Mensagem de erro específica baseada no tipo
+            let errorMessage = 'Erro ao enviar mensagem. Verifique sua conexão e tente novamente.';
+            if (error.message) {
+                errorMessage = error.message;
+            } else if (error.name === 'NetworkError' || error.name === 'TypeError') {
+                errorMessage = 'Erro de conexão. Verificando conexão...';
+                attemptReconnect();
+            }
+            
+            if (window.toastNotification) {
+                window.toastNotification.error(errorMessage, 6000);
+            } else {
+                alert(errorMessage);
+            }
         } finally {
             // Reabilitar botão com animação suave
             debugLog('Reabilitando botão de enviar...');
@@ -798,6 +831,45 @@ function debugLog(...args) {
         });
     }
 
+    // ========== RECONEXÃO AUTOMÁTICA ==========
+    
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 10;
+    const RECONNECT_DELAY = 3000; // 3 segundos
+    
+    function attemptReconnect() {
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            if (window.toastNotification) {
+                window.toastNotification.error('Falha ao reconectar. Recarregue a página.', 0);
+            }
+            return;
+        }
+        
+        reconnectAttempts++;
+        const delay = RECONNECT_DELAY * reconnectAttempts; // Exponential backoff
+        
+        if (window.toastNotification) {
+            window.toastNotification.info(`Tentando reconectar... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`, delay);
+        }
+        
+        setTimeout(() => {
+            if (window.Echo && window.Echo.connector && window.Echo.connector.pusher) {
+                const pusher = window.Echo.connector.pusher;
+                if (pusher.connection.state !== 'connected' && pusher.connection.state !== 'connecting') {
+                    pusher.connect();
+                }
+            }
+        }, delay);
+    }
+    
+    // Resetar contador quando conectar com sucesso
+    function onReconnectSuccess() {
+        reconnectAttempts = 0;
+        if (window.toastNotification) {
+            window.toastNotification.success('Conexão restabelecida!', 3000);
+        }
+    }
+
     // ========== REVERB WEBSOCKET ==========
     
     debugLog('========================================');
@@ -908,16 +980,23 @@ function debugLog(...args) {
             if (!pusher._connectionListenersAdded) {
                 connection.bind('connected', () => {
                     debugLog('✅ WebSocket CONECTADO via Pusher');
+                    onReconnectSuccess();
                 });
                 
                 connection.bind('disconnected', () => {
-                    if (DEBUG) {
-                        console.warn('⚠️ WebSocket DESCONECTADO');
+                    console.warn('⚠️ WebSocket DESCONECTADO');
+                    if (window.toastNotification) {
+                        window.toastNotification.warning('Conexão perdida. Tentando reconectar...', 5000);
                     }
+                    attemptReconnect();
                 });
                 
                 connection.bind('error', (error) => {
                     console.error('❌ Erro na conexão WebSocket:', error);
+                    if (window.toastNotification) {
+                        window.toastNotification.error('Erro na conexão. Tentando reconectar...', 5000);
+                    }
+                    attemptReconnect();
                 });
                 
                 connection.bind('state_change', (states) => {
@@ -1073,7 +1152,11 @@ function debugLog(...args) {
         } catch (error) {
             console.error('[Call] Erro ao iniciar chamada de vídeo:', error);
             // TODO: Substituir alert por sistema de notificações
-            alert('Erro ao iniciar chamada. Verifique as permissões de câmera e microfone.');
+            if (window.toastNotification) {
+                window.toastNotification.error('Erro ao iniciar chamada. Verifique as permissões de câmera e microfone.', 6000);
+            } else {
+                alert('Erro ao iniciar chamada. Verifique as permissões de câmera e microfone.');
+            }
         }
     });
     
@@ -1089,7 +1172,11 @@ function debugLog(...args) {
         } catch (error) {
             console.error('[Call] Erro ao iniciar chamada de voz:', error);
             // TODO: Substituir alert por sistema de notificações
-            alert('Erro ao iniciar chamada. Verifique as permissões de microfone.');
+            if (window.toastNotification) {
+                window.toastNotification.error('Erro ao iniciar chamada. Verifique as permissões de microfone.', 6000);
+            } else {
+                alert('Erro ao iniciar chamada. Verifique as permissões de microfone.');
+            }
         }
     });
     
@@ -1364,5 +1451,6 @@ function debugLog(...args) {
 </script>
 
 @section('scripts')
+<script src="{{ asset('js/toast-notifications.js') }}"></script>
 <script src="{{ asset('js/webrtc-manager.js') }}"></script>
 @endsection

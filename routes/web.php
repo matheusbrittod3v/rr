@@ -80,8 +80,12 @@ Route::prefix('chat')->group(function () {
     
     // Endpoints internos para processar mensagens de WebSocket (chamados após whisper)
     // Mantém arquitetura orientada a eventos - HTTP apenas para processar, não para enviar
-    Route::post('/{roomCode}/process-message', [ChatController::class, 'processMessageFromWebSocket'])->name('chat.process-message');
-    Route::post('/{roomCode}/process-call-signal', [ChatController::class, 'processCallSignalFromWebSocket'])->name('chat.process-call-signal');
+    Route::post('/{roomCode}/process-message', [ChatController::class, 'processMessageFromWebSocket'])
+        ->middleware('throttle:30,1') // 30 requisições por minuto
+        ->name('chat.process-message');
+    Route::post('/{roomCode}/process-call-signal', [ChatController::class, 'processCallSignalFromWebSocket'])
+        ->middleware('throttle:60,1') // 60 requisições por minuto (chamadas são mais frequentes)
+        ->name('chat.process-call-signal');
 });
 
 // Webhook interno do Reverb para processar client events

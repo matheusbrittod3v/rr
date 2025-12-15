@@ -6,9 +6,11 @@ use App\Models\ChatRoom;
 use App\Models\Payment;
 use App\Jobs\ProcessChatMessageJob;
 use App\Events\CallSignal;
+use App\Services\ChatFileValidationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class ChatController extends Controller
@@ -89,51 +91,91 @@ class ChatController extends Controller
     {
         // Verificar autenticação via session
         if (session('authenticated_chat_room') !== $roomCode) {
+            Log::warning('Tentativa de acesso não autorizado ao chat', [
+                'room_code' => $roomCode,
+                'ip' => $request->ip()
+            ]);
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 
         $request->validate([
             'message' => 'nullable|string|max:1000',
             'file' => 'nullable|string', // base64 encoded
-            'file_name' => 'nullable|string',
-            'file_type' => 'nullable|string',
+            'file_name' => 'nullable|string|max:255',
+            'file_type' => 'nullable|string|max:100',
             'sender_type' => 'required|string|in:client,provider',
         ]);
 
         $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
-        $senderType = $request->sender_type;
+        
+        // VALIDAÇÃO CRÍTICA: Não confiar no sender_type do request
+        // Validar baseado na sessão do usuário
+        $sessionSenderType = session('chat_user_role', 'client');
+        if (!in_array($sessionSenderType, ['client', 'provider'])) {
+            $sessionSenderType = 'client';
+        }
+        $senderType = $sessionSenderType; // Usar da sessão, não do request
 
         $filePath = null;
-        $fileType = $request->file_type;
+        $fileType = null;
 
-        // Processar arquivo se fornecido (base64)
+        // Processar arquivo se fornecido (base64) com validação robusta
         if ($request->file && $request->file_name) {
             try {
-                $fileContent = base64_decode($request->file);
-                if ($fileContent === false) {
-                    throw new \Exception('Invalid base64 file data');
+                $validationService = new ChatFileValidationService();
+                
+                // Validar arquivo base64
+                $validation = $validationService->validateBase64File(
+                    $request->file,
+                    $request->file_name,
+                    $request->file_type
+                );
+
+                if (!$validation['valid']) {
+                    Log::warning('Arquivo rejeitado na validação', [
+                        'error' => $validation['error'],
+                        'file_name' => $request->file_name,
+                        'room_code' => $roomCode
+                    ]);
+                    return response()->json([
+                        'error' => $validation['error'] ?? 'Arquivo inválido'
+                    ], 422);
                 }
 
-                // Validar tamanho (max 20MB)
-                if (strlen($fileContent) > 20 * 1024 * 1024) {
-                    throw new \Exception('File too large');
-                }
-
-                $extension = pathinfo($request->file_name, PATHINFO_EXTENSION);
+                // Decodificar base64 (já validado)
+                $fileContent = base64_decode($request->file, true);
+                
+                // Gerar nome único e seguro
+                $extension = strtolower(pathinfo($request->file_name, PATHINFO_EXTENSION));
                 $uniqueFileName = time() . '_' . Str::random(10) . '.' . $extension;
                 
+                // Salvar arquivo
                 $filePath = Storage::disk('public')->put('chat_files/' . $uniqueFileName, $fileContent);
                 
                 if (!$filePath) {
-                    throw new \Exception('Failed to save file');
+                    throw new \Exception('Falha ao salvar arquivo');
                 }
 
-                $fileType = $fileType ?: Storage::disk('public')->mimeType($filePath);
-            } catch (\Exception $e) {
-                \Log::error('Error processing file from WebSocket', [
-                    'error' => $e->getMessage(),
+                // Usar MIME type detectado pela validação
+                $fileType = $validation['mime_type'];
+
+                Log::info('Arquivo processado com sucesso', [
+                    'file_name' => $request->file_name,
+                    'mime_type' => $fileType,
+                    'size' => $validation['size'] ?? null,
                     'room_code' => $roomCode
                 ]);
+
+            } catch (\Exception $e) {
+                Log::error('Erro ao processar arquivo do WebSocket', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                    'room_code' => $roomCode
+                ]);
+                
+                return response()->json([
+                    'error' => 'Erro ao processar arquivo. Tente novamente.'
+                ], 500);
             }
         }
 
