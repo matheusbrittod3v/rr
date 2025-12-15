@@ -72,14 +72,19 @@ Route::post('/process-refund-request', [PaymentController::class, 'processRefund
 // Rota para histórico de pagamentos
 Route::get('/history', [PaymentController::class, 'showHistory'])->name('payment.history');
 
-// Rotas para chat
+// Rotas para chat (apenas visualização e autenticação)
 Route::prefix('chat')->group(function () {
     Route::get('/{roomCode}', [ChatController::class, 'showLogin'])->name('chat.login');
     Route::post('/{roomCode}/authenticate', [ChatController::class, 'authenticate'])->name('chat.authenticate');
     Route::get('/{roomCode}/room', [ChatController::class, 'showRoom'])->name('chat.room');
-    Route::post('/{roomCode}/send-message', [ChatController::class, 'sendMessage'])->name('chat.send-message');
-    Route::post('/{roomCode}/call-signal', [ChatController::class, 'sendCallSignal'])->name('chat.call-signal');
+    // Removidas rotas HTTP de envio - agora usa apenas WebSocket (client events)
 });
+
+// Webhook interno do Reverb para processar client events
+// Este endpoint é chamado pelo Reverb, não pelo frontend
+Route::post('/reverb/webhook', [App\Http\Controllers\ReverbWebhookController::class, 'handleClientEvent'])
+    ->middleware('throttle:60,1')
+    ->name('reverb.webhook');
 
 // WhatsApp QR Code endpoint (única instância - uso interno)
 Route::get('/whatsapp/qr-code', [WhatsApiController::class, 'getQrCode'])->middleware('auth');

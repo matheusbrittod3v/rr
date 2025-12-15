@@ -304,7 +304,7 @@
     $chatConfig = [
         'lastMessageId' => $chatRoom->messages->max('id') ?? 0,
         'roomCode' => $chatRoom->room_code,
-        'sendMessageUrl' => route('chat.send-message', $chatRoom->room_code),
+        // Removido sendMessageUrl - agora usa apenas WebSocket
         'senderType' => session('chat_user_role', 'client'),
     ];
 @endphp
@@ -768,11 +768,11 @@ function debugLog(...args) {
     debugLog('========================================');
     
     const roomCode = CHAT_CONFIG.roomCode;
-    const channelName = `chat-room.${roomCode}`;
+    const privateChannelName = `private-chat-room.${roomCode}`;
     
     debugLog('Configuração do canal:', {
         roomCode: roomCode,
-        channelName: channelName,
+        privateChannelName: privateChannelName,
         echoAvailable: !!window.Echo,
         echoType: typeof window.Echo,
         reverbConfig: window.Echo ? {
@@ -782,8 +782,10 @@ function debugLog(...args) {
         } : 'Echo não disponível'
     });
     
+    let privateChannel = null;
+    
     try {
-        debugLog('Criando conexão com o canal...');
+        debugLog('Criando conexão com o canal privado...');
         
         // Forçar conexão antes de criar o canal
         if (window.Echo.connector && window.Echo.connector.pusher) {
@@ -794,12 +796,13 @@ function debugLog(...args) {
             }
         }
         
-        const channel = window.Echo.channel(channelName);
-        debugLog('✅ Canal criado:', channel);
+        // Usar canal privado para segurança e client events
+        privateChannel = window.Echo.private(privateChannelName);
+        debugLog('✅ Canal privado criado:', privateChannel);
         
         debugLog('Configurando listener para evento: .chat.message.sent');
         
-        channel.listen('.chat.message.sent', (event) => {
+        privateChannel.listen('.chat.message.sent', (event) => {
             debugLog('========================================');
             debugLog('NOVA MENSAGEM RECEBIDA VIA REVERB');
             debugLog('========================================');
@@ -1250,24 +1253,20 @@ function debugLog(...args) {
     
     // Enviar status de presença quando entrar na sala
     function sendPresence(status) {
-        if (!window.Echo) return;
+        if (!window.Echo || !privateChannel) return;
         
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-        fetch(`/chat/${roomCode}/call-signal`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({
+        try {
+            // Enviar via WebSocket (whisper/client event)
+            privateChannel.whisper('client-call-signal', {
+                room_code: roomCode,
                 type: 'user_presence',
                 payload: { status: status },
                 sender_type: senderType
-            })
-        }).catch(error => {
+            });
+            debugLog('[Presence] Status enviado via WebSocket:', status);
+        } catch (error) {
             console.error('[Presence] Erro ao enviar status:', error);
-        });
+        }
     }
     
     // Enviar presença online ao carregar

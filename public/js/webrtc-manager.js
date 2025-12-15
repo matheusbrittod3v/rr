@@ -650,31 +650,32 @@ class WebRTCManager {
      * Enviar sinal via WebSocket
      */
     sendSignal(type, payload) {
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-        
-        // Enviar via API Laravel que faz broadcast via Reverb
-        fetch(`/chat/${this.roomCode}/call-signal`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({
+        // Enviar via WebSocket (whisper/client event) em vez de HTTP
+        if (!window.Echo) {
+            console.error('[WebRTC] Echo não disponível');
+            return;
+        }
+
+        try {
+            const privateChannel = window.Echo.private(`private-chat-room.${this.roomCode}`);
+            
+            if (!privateChannel) {
+                console.error('[WebRTC] Canal privado não disponível');
+                return;
+            }
+
+            // Enviar via whisper (client event)
+            privateChannel.whisper('client-call-signal', {
+                room_code: this.roomCode,
                 type: type,
                 payload: payload,
                 sender_type: this.senderType
-            })
-        }).then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        }).then(data => {
-            console.log('[WebRTC] Sinal enviado com sucesso:', type);
-        }).catch(error => {
-            console.error('[WebRTC] Erro ao enviar sinal:', error);
-        });
+            });
+
+            debugLog('[WebRTC] Sinal enviado via WebSocket:', type);
+        } catch (error) {
+            console.error('[WebRTC] Erro ao enviar sinal via WebSocket:', error);
+        }
     }
     
     /**

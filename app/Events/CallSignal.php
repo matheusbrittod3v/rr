@@ -37,10 +37,9 @@ class CallSignal implements ShouldBroadcastNow
      */
     public function broadcastOn(): array
     {
-        // Usamos um canal público ou privado baseado no roomCode.
-        // Como o chat já tem autenticação customizada, podemos usar um canal simples com nome único.
+        // Usar canal privado para segurança
         return [
-            new Channel('chat-room.' . $this->roomCode),
+            new PrivateChannel('private-chat-room.' . $this->roomCode),
         ];
     }
 

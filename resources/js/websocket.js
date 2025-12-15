@@ -18,12 +18,21 @@ window.Pusher = Pusher;
 const reverbKey = import.meta.env.VITE_REVERB_APP_KEY || 'sdfghjkhgfdfghjkhgfghjk';
 const reverbHost = import.meta.env.VITE_REVERB_HOST || 'localhost';
 const reverbPort = import.meta.env.VITE_REVERB_PORT ?? '8080';
-const reverbScheme = import.meta.env.VITE_REVERB_SCHEME ?? 'http';
+let reverbScheme = import.meta.env.VITE_REVERB_SCHEME ?? 'http';
 
 // Converter porta para número
+// Se a porta for 443, assumir HTTPS automaticamente
+let finalPort = parseInt(reverbPort, 10) || 8080;
+
+// Se porta for 443 mas scheme for http, corrigir para https
+if (finalPort === 443 && reverbScheme === 'http') {
+    reverbScheme = 'https';
+    console.warn('[Echo] ⚠️ Porta 443 detectada com scheme http. Corrigindo para https.');
+}
+
 // Em produção com HTTPS (porta 443), não especificamos porta (usa padrão)
-const isProductionHTTPS = reverbScheme === 'https' && (reverbPort === '443' || reverbPort === '');
-const port = isProductionHTTPS ? null : (parseInt(reverbPort, 10) || 8080);
+const isProductionHTTPS = reverbScheme === 'https' && finalPort === 443;
+const port = isProductionHTTPS ? null : finalPort;
 const useTLS = reverbScheme === 'https';
 
 console.log('[Echo] Configurando Laravel Echo com Reverb:', {
