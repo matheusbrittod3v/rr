@@ -38,9 +38,9 @@ return [
             'report' => false,
         ],
 
-       'public' => [
+    'public' => [
     'driver' => 'local',
-    'root' => public_path(), // << AGORA VAI PARA /public
+    'root' => public_path('app/public'), // << AGORA VAI PARA /public
     'url' => env('APP_URL'),
     'visibility' => 'public',
     'throw' => false,
