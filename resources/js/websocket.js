@@ -64,6 +64,27 @@ if (reverbKey && reverbHost) {
         console.log('[Echo] Conectando em:', isProductionHTTPS 
             ? `${reverbScheme}://${reverbHost}` 
             : `${reverbScheme}://${reverbHost}:${port}`);
+
+        // Adicionar listeners de conexão para debug
+        if (window.Echo.connector && window.Echo.connector.pusher) {
+            const pusher = window.Echo.connector.pusher;
+            
+            pusher.connection.bind('connected', () => {
+                console.log('[Echo] ✅ WebSocket CONECTADO com sucesso!');
+            });
+            
+            pusher.connection.bind('disconnected', () => {
+                console.warn('[Echo] ⚠️ WebSocket DESCONECTADO');
+            });
+            
+            pusher.connection.bind('error', (error) => {
+                console.error('[Echo] ❌ Erro na conexão WebSocket:', error);
+            });
+            
+            pusher.connection.bind('state_change', (states) => {
+                console.log('[Echo] Estado da conexão mudou:', states.previous, '->', states.current);
+            });
+        }
     } catch (error) {
         console.error('[Echo] ❌ Erro ao inicializar Echo:', error);
         console.error('[Echo] Detalhes do erro:', error.message, error.stack);

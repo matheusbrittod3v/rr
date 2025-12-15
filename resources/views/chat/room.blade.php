@@ -784,6 +784,16 @@ function debugLog(...args) {
     
     try {
         debugLog('Criando conexão com o canal...');
+        
+        // Forçar conexão antes de criar o canal
+        if (window.Echo.connector && window.Echo.connector.pusher) {
+            const pusher = window.Echo.connector.pusher;
+            if (pusher.connection.state !== 'connected' && pusher.connection.state !== 'connecting') {
+                debugLog('Forçando conexão WebSocket...');
+                pusher.connect();
+            }
+        }
+        
         const channel = window.Echo.channel(channelName);
         debugLog('✅ Canal criado:', channel);
         
@@ -833,40 +843,55 @@ function debugLog(...args) {
         debugLog('✅ Listener configurado com sucesso');
         debugLog('Aguardando mensagens do servidor...');
         
-        // Verificar status da conexão
-        if (window.Echo.connector && window.Echo.connector.socket) {
-            const socket = window.Echo.connector.socket;
+        // Verificar status da conexão (Pusher.js)
+        if (window.Echo.connector && window.Echo.connector.pusher) {
+            const pusher = window.Echo.connector.pusher;
+            const connection = pusher.connection;
+            
             debugLog('Status da conexão WebSocket:', {
-                readyState: socket.readyState,
-                readyStateText: socket.readyState === 1 ? 'OPEN' : socket.readyState === 0 ? 'CONNECTING' : 'CLOSED',
-                url: socket.url || 'N/A'
+                state: connection.state,
+                socket_id: connection.socket_id || 'não conectado',
+                url: pusher.config?.wsHost || 'N/A'
             });
             
-            // Listeners de eventos do socket
-            socket.onopen = function() {
-                debugLog('✅ WebSocket CONECTADO');
-            };
+            // Verificar se já está conectado
+            if (connection.state === 'connected') {
+                debugLog('✅ WebSocket já está CONECTADO');
+            } else if (connection.state === 'connecting') {
+                debugLog('⏳ WebSocket está CONECTANDO...');
+            } else {
+                debugLog('⚠️ WebSocket não está conectado. Estado:', connection.state);
+            }
             
-            socket.onclose = function(event) {
-                if (DEBUG) {
-                    console.warn('⚠️ WebSocket FECHADO:', {
-                        code: event.code,
-                        reason: event.reason,
-                        wasClean: event.wasClean
-                    });
-                }
-            };
-            
-            socket.onerror = function(error) {
-                console.error('❌ Erro no WebSocket:', error);
-            };
-            
-            socket.onmessage = function(event) {
-                debugLog('Mensagem raw recebida do WebSocket:', event.data);
-            };
+            // Listeners de eventos do Pusher (se ainda não foram adicionados)
+            if (!pusher._connectionListenersAdded) {
+                connection.bind('connected', () => {
+                    debugLog('✅ WebSocket CONECTADO via Pusher');
+                });
+                
+                connection.bind('disconnected', () => {
+                    if (DEBUG) {
+                        console.warn('⚠️ WebSocket DESCONECTADO');
+                    }
+                });
+                
+                connection.bind('error', (error) => {
+                    console.error('❌ Erro na conexão WebSocket:', error);
+                });
+                
+                connection.bind('state_change', (states) => {
+                    debugLog('Estado da conexão mudou:', states.previous, '->', states.current);
+                });
+                
+                pusher._connectionListenersAdded = true;
+            }
         } else {
             if (DEBUG) {
-                console.warn('⚠️ Socket não encontrado no Echo.connector');
+                console.warn('⚠️ Pusher não encontrado no Echo.connector');
+                debugLog('Estrutura do Echo.connector:', {
+                    hasConnector: !!window.Echo.connector,
+                    connectorKeys: window.Echo.connector ? Object.keys(window.Echo.connector) : []
+                });
             }
         }
         
