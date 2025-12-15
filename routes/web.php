@@ -78,6 +78,7 @@ Route::prefix('chat')->group(function () {
     Route::post('/{roomCode}/authenticate', [ChatController::class, 'authenticate'])->name('chat.authenticate');
     Route::get('/{roomCode}/room', [ChatController::class, 'showRoom'])->name('chat.room');
     Route::post('/{roomCode}/send-message', [ChatController::class, 'sendMessage'])->name('chat.send-message');
+    Route::post('/{roomCode}/call-signal', [ChatController::class, 'sendCallSignal'])->name('chat.call-signal');
 });
 
 // WhatsApp QR Code endpoint (única instância - uso interno)

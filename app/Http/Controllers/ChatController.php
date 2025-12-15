@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ChatRoom;
 use App\Models\Payment;
 use App\Jobs\ProcessChatMessageJob;
+use App\Events\CallSignal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -155,5 +156,36 @@ class ChatController extends Controller
         ]);
         
         return $chatRoom;
+    }
+
+    /**
+     * Send call signal (WebRTC signaling via WebSocket)
+     */
+    public function sendCallSignal(Request $request, $roomCode)
+    {
+        // Check permission
+        if (session('authenticated_chat_room') !== $roomCode) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $request->validate([
+            'type' => 'required|string|in:offer,answer,candidate,bye,media_frame',
+            'payload' => 'required',
+            'sender_type' => 'required|string|in:client,provider',
+        ]);
+
+        $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
+
+        // Broadcast signal via Reverb
+        event(new CallSignal($roomCode, [
+            'type' => $request->type,
+            'payload' => $request->payload,
+            'sender_type' => $request->sender_type,
+        ]));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Sinal enviado com sucesso'
+        ]);
     }
 }

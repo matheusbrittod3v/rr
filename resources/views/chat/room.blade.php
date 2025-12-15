@@ -29,6 +29,17 @@
                         <span class="hidden sm:inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white/20 text-white backdrop-blur-sm">
                             {{ $chatRoom->room_code }}
                         </span>
+                        <!-- Botões de Chamada -->
+                        <button id="call-video-btn" class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-white/10 text-white hover:bg-white/20 transition-all backdrop-blur-sm" title="Chamada de vídeo">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                        </button>
+                        <button id="call-audio-btn" class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-white/10 text-white hover:bg-white/20 transition-all backdrop-blur-sm" title="Chamada de voz">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                            </svg>
+                        </button>
                         <a href="{{ url('/') }}" class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-white/10 text-white hover:bg-white/20 transition-all backdrop-blur-sm">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -112,6 +123,90 @@
                         <button type="button" id="remove-file" class="text-red-500 hover:text-red-700">X</button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Interface de Chamada (Overlay) -->
+<div id="call-overlay" class="hidden fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center">
+    <!-- Chamada Minimizada -->
+    <div id="call-minimized" class="hidden fixed bottom-4 right-4 bg-white rounded-lg shadow-2xl p-4 w-64 z-60 cursor-pointer hover:scale-105 transition-transform">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-900">Chamada em andamento</p>
+                    <p class="text-xs text-gray-500" id="call-duration">00:00</p>
+                </div>
+            </div>
+            <button id="maximize-call" class="text-gray-600 hover:text-gray-900">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Chamada Maximizada -->
+    <div id="call-maximized" class="w-full h-full flex flex-col">
+        <!-- Vídeo Remoto -->
+        <div class="flex-1 relative bg-gray-900">
+            <video id="remote-video" autoplay playsinline class="w-full h-full object-cover"></video>
+            <!-- Vídeo Local (Picture-in-Picture) -->
+            <div class="absolute bottom-4 right-4 w-48 h-36 bg-gray-800 rounded-lg overflow-hidden shadow-2xl">
+                <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+            </div>
+        </div>
+        
+        <!-- Controles da Chamada -->
+        <div class="bg-gray-900 bg-opacity-75 px-6 py-4">
+            <div class="flex items-center justify-center space-x-4">
+                <!-- Toggle Câmera -->
+                <button id="toggle-video" class="p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all text-white">
+                    <svg id="video-on-icon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    <svg id="video-off-icon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                </button>
+                
+                <!-- Toggle Áudio -->
+                <button id="toggle-audio" class="p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all text-white">
+                    <svg id="audio-on-icon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                    <svg id="audio-off-icon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                    </svg>
+                </button>
+                
+                <!-- Trocar Câmera -->
+                <button id="switch-camera" class="p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                </button>
+                
+                <!-- Minimizar -->
+                <button id="minimize-call" class="p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-all text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+                    </svg>
+                </button>
+                
+                <!-- Encerrar Chamada -->
+                <button id="end-call" class="p-4 bg-red-600 rounded-full hover:bg-red-700 transition-all text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
             </div>
         </div>
     </div>
@@ -705,5 +800,258 @@
         }); // Fecha waitForEcho
     }); // Fecha waitForDOM
 })(); // Fecha função anônima auto-executável
+
+// ============================================
+// WEBSOCKET + WEBRTC - SISTEMA DE CHAMADAS
+// ============================================
+(function() {
+    const roomCode = "{{ $chatRoom->room_code }}";
+    const senderType = "{{ session('chat_user_role', 'client') }}";
+    
+    let webrtcManager = null;
+    let callStartTime = null;
+    let callDurationInterval = null;
+    
+    // Elementos da UI
+    const callOverlay = document.getElementById('call-overlay');
+    const callMinimized = document.getElementById('call-minimized');
+    const callMaximized = document.getElementById('call-maximized');
+    const localVideo = document.getElementById('local-video');
+    const remoteVideo = document.getElementById('remote-video');
+    const toggleVideoBtn = document.getElementById('toggle-video');
+    const toggleAudioBtn = document.getElementById('toggle-audio');
+    const switchCameraBtn = document.getElementById('switch-camera');
+    const minimizeCallBtn = document.getElementById('minimize-call');
+    const maximizeCallBtn = document.getElementById('maximize-call');
+    const endCallBtn = document.getElementById('end-call');
+    const callVideoBtn = document.getElementById('call-video-btn');
+    const callAudioBtn = document.getElementById('call-audio-btn');
+    const callDuration = document.getElementById('call-duration');
+    
+    // Ícones
+    const videoOnIcon = document.getElementById('video-on-icon');
+    const videoOffIcon = document.getElementById('video-off-icon');
+    const audioOnIcon = document.getElementById('audio-on-icon');
+    const audioOffIcon = document.getElementById('audio-off-icon');
+    
+    // Inicializar WebRTC Manager quando Echo estiver pronto
+    function initWebRTC() {
+        if (!window.WebRTCManager) {
+            console.error('[Call] WebRTCManager não carregado');
+            return;
+        }
+        
+        webrtcManager = new WebRTCManager(roomCode, senderType);
+        
+        // Configurar callbacks
+        webrtcManager.onRemoteStream = (stream) => {
+            console.log('[Call] Stream remoto recebido');
+            remoteVideo.srcObject = stream;
+        };
+        
+        webrtcManager.onTransmissionModeChanged = (mode) => {
+            console.log('[Call] Modo de transmissão:', mode);
+            // Criar ou atualizar indicador de modo
+            let modeIndicator = document.getElementById('transmission-mode-indicator');
+            if (!modeIndicator) {
+                modeIndicator = document.createElement('div');
+                modeIndicator.id = 'transmission-mode-indicator';
+                modeIndicator.className = 'absolute top-4 left-4 px-3 py-1 rounded-lg text-xs font-medium z-10';
+                callMaximized.querySelector('.relative')?.appendChild(modeIndicator) || 
+                callMaximized.querySelector('.flex-1')?.appendChild(modeIndicator);
+            }
+            modeIndicator.textContent = mode === 'webrtc' ? 'WebRTC' : 'WebSocket (Fallback)';
+            modeIndicator.className = mode === 'webrtc' 
+                ? 'absolute top-4 left-4 px-3 py-1 bg-green-500 text-white rounded-lg text-xs font-medium z-10 shadow-lg'
+                : 'absolute top-4 left-4 px-3 py-1 bg-yellow-500 text-white rounded-lg text-xs font-medium z-10 shadow-lg animate-pulse';
+        };
+        
+        webrtcManager.onVideoToggled = (enabled) => {
+            videoOnIcon.classList.toggle('hidden', !enabled);
+            videoOffIcon.classList.toggle('hidden', enabled);
+        };
+        
+        webrtcManager.onAudioToggled = (enabled) => {
+            audioOnIcon.classList.toggle('hidden', !enabled);
+            audioOffIcon.classList.toggle('hidden', enabled);
+        };
+        
+        webrtcManager.onCameraSwitched = (isFront) => {
+            console.log('[Call] Câmera trocada:', isFront ? 'frente' : 'trás');
+        };
+        
+        webrtcManager.onMinimizeToggled = (minimized) => {
+            if (minimized) {
+                callMaximized.classList.add('hidden');
+                callMinimized.classList.remove('hidden');
+            } else {
+                callMaximized.classList.remove('hidden');
+                callMinimized.classList.add('hidden');
+            }
+        };
+        
+        webrtcManager.onCallEnded = () => {
+            endCall();
+        };
+        
+        webrtcManager.onTransmissionModeChanged = (mode) => {
+            console.log('[Call] Modo de transmissão:', mode);
+            const modeIndicator = document.getElementById('transmission-mode-indicator');
+            if (modeIndicator) {
+                modeIndicator.classList.remove('hidden');
+                modeIndicator.textContent = mode === 'webrtc' ? 'WebRTC' : 'WebSocket (Fallback)';
+                modeIndicator.className = mode === 'webrtc' 
+                    ? 'absolute top-4 left-4 px-3 py-1 bg-green-500 text-white rounded-lg text-xs font-medium z-10 shadow-lg'
+                    : 'absolute top-4 left-4 px-3 py-1 bg-yellow-500 text-white rounded-lg text-xs font-medium z-10 shadow-lg animate-pulse';
+            }
+        };
+        
+        console.log('[Call] WebRTC Manager inicializado');
+    }
+    
+    // Iniciar chamada de vídeo
+    callVideoBtn?.addEventListener('click', async () => {
+        try {
+            if (!webrtcManager) initWebRTC();
+            
+            await webrtcManager.startCall(true);
+            showCallInterface();
+            localVideo.srcObject = webrtcManager.localStream;
+            startCallTimer();
+        } catch (error) {
+            console.error('[Call] Erro ao iniciar chamada de vídeo:', error);
+            alert('Erro ao iniciar chamada. Verifique as permissões de câmera e microfone.');
+        }
+    });
+    
+    // Iniciar chamada de voz
+    callAudioBtn?.addEventListener('click', async () => {
+        try {
+            if (!webrtcManager) initWebRTC();
+            
+            await webrtcManager.startCall(false);
+            showCallInterface();
+            localVideo.srcObject = webrtcManager.localStream;
+            startCallTimer();
+        } catch (error) {
+            console.error('[Call] Erro ao iniciar chamada de voz:', error);
+            alert('Erro ao iniciar chamada. Verifique as permissões de microfone.');
+        }
+    });
+    
+    // Toggle vídeo
+    toggleVideoBtn?.addEventListener('click', () => {
+        webrtcManager?.toggleVideo();
+    });
+    
+    // Toggle áudio
+    toggleAudioBtn?.addEventListener('click', () => {
+        webrtcManager?.toggleAudio();
+    });
+    
+    // Trocar câmera
+    switchCameraBtn?.addEventListener('click', () => {
+        webrtcManager?.switchCamera();
+    });
+    
+    // Minimizar chamada
+    minimizeCallBtn?.addEventListener('click', () => {
+        webrtcManager?.toggleMinimize();
+    });
+    
+    // Maximizar chamada
+    maximizeCallBtn?.addEventListener('click', () => {
+        webrtcManager?.toggleMinimize();
+    });
+    
+    // Encerrar chamada
+    endCallBtn?.addEventListener('click', () => {
+        webrtcManager?.endCall();
+    });
+    
+    // Mostrar interface de chamada
+    function showCallInterface() {
+        callOverlay.classList.remove('hidden');
+        callMaximized.classList.remove('hidden');
+        callMinimized.classList.add('hidden');
+    }
+    
+    // Encerrar chamada
+    function endCall() {
+        callOverlay.classList.add('hidden');
+        callMaximized.classList.add('hidden');
+        callMinimized.classList.add('hidden');
+        
+        if (localVideo.srcObject) {
+            localVideo.srcObject = null;
+        }
+        if (remoteVideo.srcObject) {
+            remoteVideo.srcObject = null;
+        }
+        
+        stopCallTimer();
+        webrtcManager = null;
+    }
+    
+    // Timer de duração da chamada
+    function startCallTimer() {
+        callStartTime = Date.now();
+        callDurationInterval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            callDuration.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }, 1000);
+    }
+    
+    function stopCallTimer() {
+        if (callDurationInterval) {
+            clearInterval(callDurationInterval);
+            callDurationInterval = null;
+        }
+        callStartTime = null;
+        callDuration.textContent = '00:00';
+    }
+    
+    // Escutar ofertas de chamada via WebSocket
+    if (window.Echo) {
+        const channel = window.Echo.channel(`chat-room.${roomCode}`);
+        
+        channel.listen('.call.signal', (event) => {
+            const { type, payload, sender_type } = event.data;
+            
+            // Ignorar sinais do próprio usuário
+            if (sender_type === senderType) return;
+            
+            // Se receber offer, aceitar automaticamente
+            if (type === 'offer' && !webrtcManager) {
+                initWebRTC();
+                webrtcManager.acceptCall(payload).then(() => {
+                    showCallInterface();
+                    localVideo.srcObject = webrtcManager.localStream;
+                    startCallTimer();
+                }).catch(error => {
+                    console.error('[Call] Erro ao aceitar chamada:', error);
+                });
+            }
+        });
+    }
+    
+    // Inicializar quando Echo estiver pronto
+    if (window.Echo) {
+        initWebRTC();
+    } else {
+        // Aguardar Echo
+        const checkEcho = setInterval(() => {
+            if (window.Echo) {
+                clearInterval(checkEcho);
+                initWebRTC();
+            }
+        }, 100);
+    }
+})();
 </script>
+
+@section('scripts')
+<script src="{{ asset('js/webrtc-manager.js') }}"></script>
 @endsection
