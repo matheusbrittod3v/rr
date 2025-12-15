@@ -433,10 +433,10 @@ function debugLog(...args) {
         elements.charCount.textContent = this.value.length + '/' + CONFIG.MAX_MESSAGE_LENGTH;
     });
 
-    // Função para enviar mensagem - requisição assíncrona em background
+    // Função para enviar mensagem via WebSocket (client event/whisper)
     async function sendMessage() {
         debugLog('========================================');
-        debugLog('INICIANDO ENVIO DE MENSAGEM');
+        debugLog('INICIANDO ENVIO DE MENSAGEM VIA WEBSOCKET');
         debugLog('========================================');
         
         const message = elements.messageInput.value.trim();
@@ -460,26 +460,14 @@ function debugLog(...args) {
             return;
         }
 
-        debugLog('Preparando FormData...');
-        const formData = new FormData();
-        formData.append('message', message);
-        formData.append('_token', config.csrfToken);
-        if (state.selectedFile) {
-            formData.append('file', state.selectedFile);
-            debugLog('Arquivo adicionado ao FormData:', {
-                name: state.selectedFile.name,
-                size: state.selectedFile.size,
-                type: state.selectedFile.type
-            });
+        // Verificar se o canal privado está disponível
+        if (!privateChannel) {
+            console.error('❌ Canal privado não disponível');
+            alert('Erro: não conectado ao chat. Recarregue a página.');
+            return;
         }
-        
-        debugLog('FormData preparado:', {
-            hasMessage: formData.has('message'),
-            hasToken: formData.has('_token'),
-            hasFile: formData.has('file')
-        });
 
-        // Desabilitar botão de enviar durante o envio com animação
+        // Desabilitar botão de enviar durante o envio
         const sendButton = elements.sendButton;
         const sendIcon = elements.sendIcon;
         const originalIconHTML = sendIcon ? sendIcon.outerHTML : '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>';
@@ -493,59 +481,76 @@ function debugLog(...args) {
         debugLog('Botão de enviar desabilitado com animação de loading');
 
         try {
-            debugLog('Enviando requisição HTTP...');
-            debugLog('URL:', config.sendMessageUrl);
-            debugLog('Método: POST');
-            debugLog('Headers:', {
-                'X-Requested-With': 'XMLHttpRequest'
-            });
+            debugLog('Preparando dados para envio via WebSocket...');
             
-            const startTime = Date.now();
+            // Preparar dados do arquivo (base64) se houver
+            let fileData = null;
+            let fileName = null;
+            let fileType = null;
             
-            // Requisição assíncrona em background (não bloqueia a UI)
-            const res = await fetch(config.sendMessageUrl, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            });
-            
-            const requestTime = Date.now() - startTime;
-            debugLog('✅ Resposta recebida em', requestTime + 'ms');
-            debugLog('Status HTTP:', res.status, res.statusText);
-            debugLog('Headers da resposta:', Object.fromEntries(res.headers.entries()));
-            
-            const data = await res.json();
-            debugLog('Dados da resposta:', data);
-            
-            if (data.success) {
-                debugLog('✅ Mensagem enviada com sucesso!');
-                debugLog('Limpando formulário...');
-                
-                // Limpar formulário apenas se sucesso
-                elements.messageInput.value = '';
-                elements.messageInput.style.height = 'auto';
-                elements.charCount.textContent = '0/' + CONFIG.MAX_MESSAGE_LENGTH;
-                state.selectedFile = null;
-                elements.filePreview.classList.add('hidden');
-                elements.fileInput.value = '';
-                
-                debugLog('Formulário limpo');
-                debugLog('Aguardando broadcast via Reverb...');
-            } else {
-                console.error('❌ Erro ao enviar mensagem:', data);
-                // TODO: Substituir alert por sistema de notificações
-                alert('Erro ao enviar mensagem. Tente novamente.');
+            if (state.selectedFile) {
+                debugLog('Processando arquivo para base64...');
+                fileData = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        // Remover prefixo data:image/...;base64,
+                        const base64 = reader.result.split(',')[1];
+                        resolve(base64);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(state.selectedFile);
+                });
+                fileName = state.selectedFile.name;
+                fileType = state.selectedFile.type;
+                debugLog('Arquivo convertido para base64:', {
+                    fileName: fileName,
+                    fileType: fileType,
+                    size: fileData.length
+                });
             }
+            
+            const eventData = {
+                room_code: CHAT_CONFIG.roomCode,
+                message: message || null,
+                sender_type: CHAT_CONFIG.senderType,
+                file: fileData,
+                file_name: fileName,
+                file_type: fileType
+            };
+            
+            debugLog('Enviando client event (whisper)...');
+            debugLog('Evento: client-send-message');
+            debugLog('Dados:', {
+                room_code: eventData.room_code,
+                hasMessage: !!eventData.message,
+                hasFile: !!eventData.file,
+                sender_type: eventData.sender_type
+            });
+            
+            // Enviar via whisper (client event)
+            privateChannel.whisper('client-send-message', eventData);
+            
+            debugLog('✅ Mensagem enviada via WebSocket!');
+            debugLog('Limpando formulário...');
+            
+            // Limpar formulário imediatamente (otimista)
+            elements.messageInput.value = '';
+            elements.messageInput.style.height = 'auto';
+            elements.charCount.textContent = '0/' + CONFIG.MAX_MESSAGE_LENGTH;
+            state.selectedFile = null;
+            elements.filePreview.classList.add('hidden');
+            elements.fileInput.value = '';
+            
+            debugLog('Formulário limpo');
+            debugLog('Aguardando broadcast via Reverb...');
+            
         } catch (error) {
-            console.error('❌ ERRO na requisição:', error);
+            console.error('❌ ERRO ao enviar mensagem via WebSocket:', error);
             if (DEBUG) {
                 console.error('Tipo do erro:', error.name);
                 console.error('Mensagem do erro:', error.message);
                 console.error('Stack trace:', error.stack);
             }
-            // TODO: Substituir alert por sistema de notificações
             alert('Erro ao enviar mensagem. Verifique sua conexão e tente novamente.');
         } finally {
             // Reabilitar botão com animação suave
@@ -919,7 +924,7 @@ function debugLog(...args) {
     debugLog('INICIALIZAÇÃO DO CHAT COMPLETA');
     debugLog('========================================');
     debugLog('Sistema pronto para enviar e receber mensagens');
-    debugLog('Canal Reverb:', channelName);
+            debugLog('Canal Reverb:', privateChannelName);
     debugLog('========================================');
     
         }); // Fecha waitForEcho
@@ -1192,11 +1197,9 @@ function debugLog(...args) {
     });
     
     // Escutar ofertas de chamada via WebSocket (consolidado)
-    if (window.Echo) {
-        const channel = window.Echo.channel(`chat-room.${roomCode}`);
-        
+    if (window.Echo && privateChannel) {
         // Listener único consolidado para todos os eventos
-        channel.listen('.call.signal', (event) => {
+        privateChannel.listen('.call.signal', (event) => {
             try {
                 const { type, payload, sender_type } = event.data;
                 
@@ -1269,15 +1272,25 @@ function debugLog(...args) {
         }
     }
     
-    // Enviar presença online ao carregar
+    // Enviar presença online após canal estar pronto
+    // Aguardar canal privado estar disponível antes de enviar presença
+    function waitForPrivateChannelAndSendPresence() {
+        if (privateChannel) {
+            sendPresence('online');
+            initWebRTC();
+            
+            // Enviar presença offline ao sair
+            window.addEventListener('beforeunload', () => {
+                sendPresence('offline');
+            });
+        } else {
+            // Tentar novamente após um pequeno delay
+            setTimeout(waitForPrivateChannelAndSendPresence, 100);
+        }
+    }
+    
     if (window.Echo) {
-        sendPresence('online');
-        initWebRTC();
-        
-        // Enviar presença offline ao sair
-        window.addEventListener('beforeunload', () => {
-            sendPresence('offline');
-        });
+        waitForPrivateChannelAndSendPresence();
     } else {
         // Aguardar Echo (usando Promise com timeout)
         let attempts = 0;
