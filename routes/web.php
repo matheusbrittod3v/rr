@@ -72,12 +72,16 @@ Route::post('/process-refund-request', [PaymentController::class, 'processRefund
 // Rota para histórico de pagamentos
 Route::get('/history', [PaymentController::class, 'showHistory'])->name('payment.history');
 
-// Rotas para chat (apenas visualização e autenticação)
+// Rotas para chat
 Route::prefix('chat')->group(function () {
     Route::get('/{roomCode}', [ChatController::class, 'showLogin'])->name('chat.login');
     Route::post('/{roomCode}/authenticate', [ChatController::class, 'authenticate'])->name('chat.authenticate');
     Route::get('/{roomCode}/room', [ChatController::class, 'showRoom'])->name('chat.room');
-    // Removidas rotas HTTP de envio - agora usa apenas WebSocket (client events)
+    
+    // Endpoints internos para processar mensagens de WebSocket (chamados após whisper)
+    // Mantém arquitetura orientada a eventos - HTTP apenas para processar, não para enviar
+    Route::post('/{roomCode}/process-message', [ChatController::class, 'processMessageFromWebSocket'])->name('chat.process-message');
+    Route::post('/{roomCode}/process-call-signal', [ChatController::class, 'processCallSignalFromWebSocket'])->name('chat.process-call-signal');
 });
 
 // Webhook interno do Reverb para processar client events

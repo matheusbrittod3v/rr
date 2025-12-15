@@ -650,7 +650,7 @@ class WebRTCManager {
      * Enviar sinal via WebSocket
      */
     sendSignal(type, payload) {
-        // Enviar via WebSocket (whisper/client event) em vez de HTTP
+        // Enviar via WebSocket (whisper/client event) e processar no backend
         if (!window.Echo) {
             console.error('[WebRTC] Echo não disponível');
             return;
@@ -664,7 +664,7 @@ class WebRTCManager {
                 return;
             }
 
-            // Enviar via whisper (client event)
+            // Enviar via whisper (client event) - para notificar outros clientes
             privateChannel.whisper('client-call-signal', {
                 room_code: this.roomCode,
                 type: type,
@@ -672,7 +672,26 @@ class WebRTCManager {
                 sender_type: this.senderType
             });
 
-            debugLog('[WebRTC] Sinal enviado via WebSocket:', type);
+            // Processar no backend via HTTP (Reverb não processa whispers automaticamente)
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+            
+            fetch(`/chat/${this.roomCode}/process-call-signal`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    type: type,
+                    payload: payload,
+                    sender_type: this.senderType
+                })
+            }).catch(error => {
+                console.error('[WebRTC] Erro ao processar sinal no backend:', error);
+            });
+
+            debugLog('[WebRTC] Sinal enviado via WebSocket e processado:', type);
         } catch (error) {
             console.error('[WebRTC] Erro ao enviar sinal via WebSocket:', error);
         }

@@ -81,45 +81,71 @@ class ChatController extends Controller
     }
 
     /**
-     * Send a message in the chat room.
+     * Process message from WebSocket client event
+     * Este endpoint é chamado internamente quando um whisper é enviado
+     * Mantém a arquitetura orientada a eventos
      */
-    public function sendMessage(Request $request, $roomCode)
+    public function processMessageFromWebSocket(Request $request, $roomCode)
     {
-        // Check permission - apenas client ou provider
+        // Verificar autenticação via session
         if (session('authenticated_chat_room') !== $roomCode) {
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 
         $request->validate([
             'message' => 'nullable|string|max:1000',
-            'file' => 'nullable|file|mimes:jpg,jpeg,png,gif,webp,mp4,mov,avi,mp3,wav,pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,zip,rar,7z,tar,gz|max:20480',
+            'file' => 'nullable|string', // base64 encoded
+            'file_name' => 'nullable|string',
+            'file_type' => 'nullable|string',
+            'sender_type' => 'required|string|in:client,provider',
         ]);
 
         $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
-
-        // Determine sender type - apenas client ou provider
-        $senderType = session('chat_user_role', 'client');
-        
-        // Garantir que seja apenas client ou provider
-        if ($senderType !== 'client' && $senderType !== 'provider') {
-            $senderType = 'client';
-        }
+        $senderType = $request->sender_type;
 
         $filePath = null;
-        $fileType = null;
+        $fileType = $request->file_type;
 
-        // Handle file upload
-        if ($request->hasFile('file')) {
-            $file = $request->file('file');
-            $fileName = time() . '_' . Str::random(10) . '.' . $file->getClientOriginalExtension();
-            $filePath = $file->store('chat_files', 'public');
-            $fileType = $file->getClientMimeType();
+        // Processar arquivo se fornecido (base64)
+        if ($request->file && $request->file_name) {
+            try {
+                $fileContent = base64_decode($request->file);
+                if ($fileContent === false) {
+                    throw new \Exception('Invalid base64 file data');
+                }
+
+                // Validar tamanho (max 20MB)
+                if (strlen($fileContent) > 20 * 1024 * 1024) {
+                    throw new \Exception('File too large');
+                }
+
+                $extension = pathinfo($request->file_name, PATHINFO_EXTENSION);
+                $uniqueFileName = time() . '_' . Str::random(10) . '.' . $extension;
+                
+                $filePath = Storage::disk('public')->put('chat_files/' . $uniqueFileName, $fileContent);
+                
+                if (!$filePath) {
+                    throw new \Exception('Failed to save file');
+                }
+
+                $fileType = $fileType ?: Storage::disk('public')->mimeType($filePath);
+            } catch (\Exception $e) {
+                \Log::error('Error processing file from WebSocket', [
+                    'error' => $e->getMessage(),
+                    'room_code' => $roomCode
+                ]);
+            }
         }
 
-        // Dispatch job to process message (Redis Queue -> PostgreSQL -> Broadcast)
+        // Se não há mensagem nem arquivo, retornar erro
+        if (empty($request->message) && !$filePath) {
+            return response()->json(['error' => 'Message or file is required'], 400);
+        }
+
+        // Dispatch job para processar mensagem
         ProcessChatMessageJob::dispatch(
             $chatRoom->id,
-            Auth::id(),
+            Auth::id() ?? 0,
             $senderType,
             $request->message,
             $filePath,
@@ -128,7 +154,39 @@ class ChatController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Mensagem enviada com sucesso'
+            'message' => 'Mensagem processada com sucesso'
+        ]);
+    }
+
+    /**
+     * Process call signal from WebSocket client event
+     * Este endpoint é chamado internamente quando um whisper de call signal é enviado
+     */
+    public function processCallSignalFromWebSocket(Request $request, $roomCode)
+    {
+        // Verificar autenticação via session
+        if (session('authenticated_chat_room') !== $roomCode) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $request->validate([
+            'type' => 'required|string|in:offer,answer,candidate,bye,media_frame,call_action,user_presence',
+            'payload' => 'required',
+            'sender_type' => 'required|string|in:client,provider',
+        ]);
+
+        $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
+
+        // Broadcast signal via Reverb
+        event(new CallSignal($roomCode, [
+            'type' => $request->type,
+            'payload' => $request->payload,
+            'sender_type' => $request->sender_type,
+        ]));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Sinal processado com sucesso'
         ]);
     }
 
@@ -156,45 +214,5 @@ class ChatController extends Controller
         ]);
         
         return $chatRoom;
-    }
-
-    /**
-     * Send call signal (WebRTC signaling via WebSocket)
-     */
-    public function sendCallSignal(Request $request, $roomCode)
-    {
-        // Check permission
-        if (session('authenticated_chat_room') !== $roomCode) {
-            return response()->json(['error' => 'Unauthorized'], 401);
-        }
-
-        $request->validate([
-            'type' => 'required|string|in:offer,answer,candidate,bye,media_frame,call_action,user_presence',
-            'payload' => 'required',
-            'sender_type' => 'required|string|in:client,provider',
-        ]);
-        
-        // Para tipos offer/answer, payload pode ser objeto complexo (SDP)
-        // Para outros tipos, validar conforme necessário
-        if (in_array($request->type, ['offer', 'answer']) && is_array($request->payload)) {
-            // Validar estrutura básica do SDP
-            if (!isset($request->payload['type']) || !isset($request->payload['sdp'])) {
-                return response()->json(['error' => 'Invalid SDP structure'], 422);
-            }
-        }
-
-        $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
-
-        // Broadcast signal via Reverb
-        event(new CallSignal($roomCode, [
-            'type' => $request->type,
-            'payload' => $request->payload,
-            'sender_type' => $request->sender_type,
-        ]));
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Sinal enviado com sucesso'
-        ]);
     }
 }

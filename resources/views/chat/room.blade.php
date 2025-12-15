@@ -527,10 +527,42 @@ function debugLog(...args) {
                 sender_type: eventData.sender_type
             });
             
-            // Enviar via whisper (client event)
+            // Enviar via whisper (client event) - para notificar outros clientes
             privateChannel.whisper('client-send-message', eventData);
             
-            debugLog('✅ Mensagem enviada via WebSocket!');
+            // Processar mensagem no backend via HTTP (Reverb não processa whispers automaticamente)
+            // Isso mantém a arquitetura orientada a eventos - o whisper é o evento, HTTP apenas processa
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+            
+            try {
+                const processResponse = await fetch(`/chat/${CHAT_CONFIG.roomCode}/process-message`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        message: eventData.message,
+                        file: eventData.file,
+                        file_name: eventData.file_name,
+                        file_type: eventData.file_type,
+                        sender_type: eventData.sender_type
+                    })
+                });
+                
+                const processData = await processResponse.json();
+                
+                if (processData.success) {
+                    debugLog('✅ Mensagem processada no backend!');
+                } else {
+                    console.error('❌ Erro ao processar mensagem:', processData);
+                }
+            } catch (processError) {
+                console.error('❌ Erro ao processar mensagem no backend:', processError);
+            }
+            
+            debugLog('✅ Mensagem enviada via WebSocket e processada!');
             debugLog('Limpando formulário...');
             
             // Limpar formulário imediatamente (otimista)
@@ -775,6 +807,9 @@ function debugLog(...args) {
     const roomCode = CHAT_CONFIG.roomCode;
     const privateChannelName = `private-chat-room.${roomCode}`;
     
+    // Declarar privateChannel no escopo global da função para ser acessível em todas as funções
+    let privateChannel = null;
+    
     debugLog('Configuração do canal:', {
         roomCode: roomCode,
         privateChannelName: privateChannelName,
@@ -786,8 +821,6 @@ function debugLog(...args) {
             broadcaster: window.Echo.connector?.options?.broadcaster || 'não configurado'
         } : 'Echo não disponível'
     });
-    
-    let privateChannel = null;
     
     try {
         debugLog('Criando conexão com o canal privado...');
@@ -1259,14 +1292,33 @@ function debugLog(...args) {
         if (!window.Echo || !privateChannel) return;
         
         try {
-            // Enviar via WebSocket (whisper/client event)
+            // Enviar via whisper (client event)
             privateChannel.whisper('client-call-signal', {
                 room_code: roomCode,
                 type: 'user_presence',
                 payload: { status: status },
                 sender_type: senderType
             });
-            debugLog('[Presence] Status enviado via WebSocket:', status);
+            
+            // Processar no backend via HTTP
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+            fetch(`/chat/${roomCode}/process-call-signal`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    type: 'user_presence',
+                    payload: { status: status },
+                    sender_type: senderType
+                })
+            }).catch(error => {
+                console.error('[Presence] Erro ao processar status no backend:', error);
+            });
+            
+            debugLog('[Presence] Status enviado via WebSocket e processado:', status);
         } catch (error) {
             console.error('[Presence] Erro ao enviar status:', error);
         }
