@@ -157,19 +157,240 @@
 </style>
 
 <script>
+@php
+    $chatConfig = [
+        'roomCode' => $chatRoom->room_code,
+        'senderType' => session('chat_user_role', 'client'),
+    ];
+@endphp
+
+const CHAT_CONFIG = @json($chatConfig);
+
+// ========== CONFIGURAÇÃO DO CHAT ==========
+let privateChannel = null;
+let isConnected = false;
+
+// Elementos DOM
+const elements = {
+    messageInput: document.getElementById('message-input'),
+    sendButton: document.getElementById('send-button'),
+    chatMessages: document.getElementById('chat-messages'),
+    charCount: document.getElementById('char-count'),
+    chatForm: document.getElementById('chat-form'),
+};
+
+// ========== FUNÇÕES AUXILIARES ==========
+
 // Auto-resize textarea
-document.getElementById('message-input')?.addEventListener('input', function() {
+elements.messageInput?.addEventListener('input', function() {
     this.style.height = 'auto';
     this.style.height = (this.scrollHeight) + 'px';
-    document.getElementById('char-count').textContent = this.value.length + '/1000';
+    elements.charCount.textContent = this.value.length + '/1000';
 });
 
-// Scroll to bottom on load
-window.addEventListener('load', function() {
-    const messagesContainer = document.getElementById('chat-messages');
-    if (messagesContainer) {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+// Scroll para o final
+function scrollToBottom() {
+    elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+}
+
+// Adicionar mensagem ao chat
+function addMessageToChat(message, senderType) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'mb-4 animate-fade-in';
+    
+    const isClient = senderType === 'client';
+    const isCurrentUser = senderType === CHAT_CONFIG.senderType;
+    
+    // Escape HTML para prevenir XSS
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
+    
+    const safeMessage = message ? escapeHtml(message) : '';
+    const timeString = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    
+    messageDiv.innerHTML = `
+        <div class="flex ${isClient ? 'justify-end' : 'justify-start'}">
+            <div class="max-w-xs sm:max-w-md lg:max-w-lg">
+                <div class="flex items-end gap-2 ${isClient ? 'flex-row-reverse' : 'flex-row'}">
+                    <div class="px-4 py-3 rounded-2xl shadow-sm ${
+                        isClient ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-sm' : 
+                        'bg-white text-gray-800 border border-gray-200 rounded-bl-sm'
+                    }">
+                        ${safeMessage ? `<p class="text-sm break-words">${safeMessage}</p>` : ''}
+                        <p class="text-xs mt-1.5 ${isClient ? 'text-blue-200' : 'text-gray-500'}">
+                            ${escapeHtml(timeString)}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    elements.chatMessages.appendChild(messageDiv);
+    scrollToBottom();
+}
+
+// ========== WEBSOCKET - LARAVEL ECHO + REVERB ==========
+
+function initializeChat() {
+    // Aguardar Echo estar disponível
+    function waitForEcho(callback, maxAttempts = 50) {
+        let attempts = 0;
+        
+        function checkEcho() {
+            attempts++;
+            
+            if (window.Echo && typeof window.Echo.private === 'function') {
+                console.log('[Chat] ✅ Echo encontrado!');
+                callback();
+            } else if (attempts >= maxAttempts) {
+                console.error('[Chat] ❌ Timeout: Echo não foi carregado');
+                alert('Erro ao conectar ao chat. Recarregue a página.');
+            } else {
+                setTimeout(checkEcho, 100);
+            }
+        }
+        
+        checkEcho();
+    }
+    
+    waitForEcho(function() {
+        const roomCode = CHAT_CONFIG.roomCode;
+        const channelName = `private-chat-room.${roomCode}`;
+        
+        console.log('[Chat] Conectando ao canal:', channelName);
+        
+        try {
+            // Criar canal privado
+            privateChannel = window.Echo.private(channelName);
+            
+            // Listener para receber mensagens via whisper
+            privateChannel.listenForWhisper('client-chat-message', (data) => {
+                console.log('[Chat] Mensagem recebida via whisper:', data);
+                
+                // Ignorar mensagens do próprio usuário
+                if (data.sender_type === CHAT_CONFIG.senderType) {
+                    return;
+                }
+                
+                // Adicionar mensagem ao chat
+                addMessageToChat(data.message, data.sender_type);
+            });
+            
+            // Listener para status de conexão
+            if (window.Echo.connector && window.Echo.connector.pusher) {
+                const pusher = window.Echo.connector.pusher;
+                
+                pusher.connection.bind('connected', () => {
+                    console.log('[Chat] ✅ WebSocket CONECTADO');
+                    isConnected = true;
+                });
+                
+                pusher.connection.bind('disconnected', () => {
+                    console.warn('[Chat] ⚠️ WebSocket DESCONECTADO');
+                    isConnected = false;
+                });
+                
+                pusher.connection.bind('error', (error) => {
+                    console.error('[Chat] ❌ Erro na conexão:', error);
+                    isConnected = false;
+                });
+            }
+            
+            console.log('[Chat] ✅ Chat inicializado com sucesso!');
+            isConnected = true;
+            
+        } catch (error) {
+            console.error('[Chat] ❌ Erro ao inicializar chat:', error);
+            alert('Erro ao conectar ao chat. Recarregue a página.');
+        }
+    });
+}
+
+// ========== ENVIAR MENSAGEM ==========
+
+async function sendMessage() {
+    const message = elements.messageInput.value.trim();
+    
+    if (!message) {
+        return;
+    }
+    
+    if (!isConnected || !privateChannel) {
+        alert('Não conectado ao chat. Aguarde a conexão...');
+        return;
+    }
+    
+    // Desabilitar botão durante envio
+    elements.sendButton.disabled = true;
+    elements.sendButton.classList.add('opacity-50', 'cursor-not-allowed');
+    
+    try {
+        // Enviar mensagem via whisper (client event)
+        privateChannel.whisper('client-chat-message', {
+            room_code: CHAT_CONFIG.roomCode,
+            message: message,
+            sender_type: CHAT_CONFIG.senderType,
+            timestamp: Date.now(),
+        });
+        
+        console.log('[Chat] Mensagem enviada via whisper:', message);
+        
+        // Adicionar mensagem localmente (otimista)
+        addMessageToChat(message, CHAT_CONFIG.senderType);
+        
+        // Limpar input
+        elements.messageInput.value = '';
+        elements.messageInput.style.height = 'auto';
+        elements.charCount.textContent = '0/1000';
+        
+    } catch (error) {
+        console.error('[Chat] ❌ Erro ao enviar mensagem:', error);
+        alert('Erro ao enviar mensagem. Tente novamente.');
+    } finally {
+        // Reabilitar botão
+        elements.sendButton.disabled = false;
+        elements.sendButton.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+}
+
+// ========== EVENT LISTENERS ==========
+
+// Form submit
+elements.chatForm?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    sendMessage();
+});
+
+// Botão enviar
+elements.sendButton?.addEventListener('click', function(e) {
+    e.preventDefault();
+    sendMessage();
+});
+
+// Enter para enviar (Shift+Enter para nova linha)
+elements.messageInput?.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+
+// ========== INICIALIZAÇÃO ==========
+
+// Aguardar DOM estar pronto
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeChat);
+} else {
+    initializeChat();
+}
+
+// Scroll inicial
+window.addEventListener('load', function() {
+    scrollToBottom();
 });
 </script>
 @endsection
