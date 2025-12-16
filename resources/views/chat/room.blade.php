@@ -164,7 +164,7 @@
                 <form id="chat-form" class="flex items-end space-x-3" onsubmit="return false;">
                     @csrf
                     <!-- Hidden File Input -->
-                    <input type="file" id="file-input" class="hidden" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar">
+                    <input type="file" id="file-input" class="hidden">
                     
                     <div class="flex-1">
                         <textarea 
@@ -713,6 +713,12 @@ async function sendMessage() {
             errorMessage = 'Erro de segurança. Recarregue a página (F5).';
         } else if (error.message.includes('413') || error.message.includes('too large')) {
             errorMessage = 'Arquivo muito grande. Máximo 10MB.';
+        } else if (error.message.includes('Tipo de arquivo não permitido')) {
+             if (hasFile) {
+                errorMessage = `Tipo de arquivo não permitido: ${fileInput.files[0].type || 'desconhecido'}`;
+            } else {
+                errorMessage = error.message;
+            }
         } else {
             errorMessage = error.message;
         }

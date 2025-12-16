@@ -22,6 +22,8 @@ class ServicesForm
                 FileUpload::make('photo_patch')
                     ->label('Imagem do Serviço')
                     ->image()
+                    ->disk('public') // Forçar disco público
+                    ->visibility('public')
                     ->directory('services'),
                 TextInput::make('nome_servico')
                     ->label('Nome do Serviço')

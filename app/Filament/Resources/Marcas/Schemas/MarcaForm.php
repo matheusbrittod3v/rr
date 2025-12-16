@@ -16,6 +16,8 @@ class MarcaForm
                     ->required(),
                 FileUpload::make('caminho_imagem')
                     ->image()
+                    ->disk('public') // Forçar disco público
+                    ->visibility('public')
                     ->directory('marcas'),
             ]);
     }
