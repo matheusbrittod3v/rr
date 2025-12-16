@@ -588,7 +588,7 @@
                 <div class="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center">
                     <span class="text-white font-bold text-xl">TT</span>
                 </div>
-                <h1 class="text-2xl font-bold text-slate-900 dark:text-white">renttool<span class="text-primary">.store</span></h1>
+                <h1 class="text-2xl font-bold text-slate-900 dark:text-white">uniontechnicals<span class="text-primary">.com</span></h1>
             </div>
             
             <!-- Desktop Navigation -->
@@ -606,9 +606,7 @@
                     </svg>
                 </button>
 
-                <a href="#" id="refundLink" class="hidden md:inline-block bg-yellow-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-yellow-600 transition btn-secondary">
-                    Reembolso
-                </a>
+
                 <a href="#services" class="hidden md:inline-block bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition btn-primary">
                     Solicitar Serviço
                 </a>
@@ -631,9 +629,7 @@
                 <a href="#faq" class="text-slate-600 hover:text-primary font-medium dark:text-slate-300 dark:hover:text-primary">FAQ</a>
                 
 
-                <a href="#" id="refundLinkMobile" class="bg-yellow-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-yellow-600 transition btn-secondary text-center">
-                    Reembolso
-                </a>
+
                 <a href="#services" class="bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition btn-primary text-center">
                     Solicitar Serviço
                 </a>

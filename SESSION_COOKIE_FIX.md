@@ -24,7 +24,7 @@ Adicione/ajuste estas variáveis no seu `.env`:
 ```env
 # Sessão - ESSENCIAL para funcionar com Reverb em porta diferente
 SESSION_DRIVER=database
-SESSION_DOMAIN=.renttool.store
+SESSION_DOMAIN=.uniontechnicals.com
 SESSION_SECURE_COOKIE=true
 SESSION_SAME_SITE=none
 
@@ -32,7 +32,7 @@ SESSION_SAME_SITE=none
 REVERB_APP_ID=seu-app-id
 REVERB_APP_KEY=sua-app-key
 REVERB_APP_SECRET=seu-app-secret
-REVERB_HOST=renttool.store
+REVERB_HOST=uniontechnicals.com
 REVERB_PORT=8082
 REVERB_SCHEME=https
 ```
@@ -47,7 +47,7 @@ REVERB_SCHEME=https
 
 Após fazer login, acesse:
 ```
-https://renttool.store/debug-session
+https://uniontechnicals.com/debug-session
 ```
 
 Compare o `session_id` retornado com o log do `channels.php`. Se forem diferentes, o cookie não foi enviado.
@@ -67,7 +67,7 @@ Compare o `session_id` retornado com o log do `channels.php`. Se forem diferente
 
 - O `withCredentials: true` no Echo garante que cookies sejam enviados mesmo em requisições para portas diferentes
 - O `credentials: 'include'` no fetch garante que cookies sejam enviados em requisições cross-origin
-- O `SESSION_DOMAIN=.renttool.store` (com ponto inicial) permite que o cookie seja compartilhado entre subdomínios e portas do mesmo domínio
+- O `SESSION_DOMAIN=.uniontechnicals.com` (com ponto inicial) permite que o cookie seja compartilhado entre subdomínios e portas do mesmo domínio
 - O `SESSION_SAME_SITE=none` é necessário porque o auth do Echo não é uma navegação top-level
 
 ## 🚀 Arquitetura Alternativa (Opcional)

@@ -24,8 +24,8 @@
     RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
     
     # Canonical URL redirect
-    RewriteCond %{HTTP_HOST} !^renttool\.store$ [NC]
-    RewriteRule ^(.*)$ https://renttool.store /$1 [L,R=301]
+    RewriteCond %{HTTP_HOST} !^uniontechnicals\.com$ [NC]
+    RewriteRule ^(.*)$ https://uniontechnicals.com /$1 [L,R=301]
 </IfModule>
 
 # Security headers

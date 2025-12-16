@@ -10,6 +10,6 @@ Disallow: /node_modules/
 Allow: /
 Allow: /sitemap.xml
 
-Sitemap: https://renttool.store/sitemap.xml
+Sitemap: https://uniontechnicals.com/sitemap.xml
 
 Host: renttool.com
