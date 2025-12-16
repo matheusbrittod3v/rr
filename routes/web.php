@@ -89,9 +89,16 @@ Route::get('/history', [PaymentController::class, 'showHistory'])->name('payment
 
 // Rotas para chat
 Route::prefix('chat')->group(function () {
+    // Login - sem autenticação necessária
     Route::get('/{roomCode}', [\App\Http\Controllers\ChatRoomController::class, 'showLogin'])->name('chat.login');
+    
+    // Autenticação - sem middleware de sessão (ainda não está autenticado)
     Route::post('/{roomCode}/authenticate', [\App\Http\Controllers\ChatRoomController::class, 'authenticate'])->name('chat.authenticate');
-    Route::get('/{roomCode}/room', [\App\Http\Controllers\ChatRoomController::class, 'showRoom'])->name('chat.room');
+    
+    // Sala de chat - REQUER autenticação via middleware
+    Route::get('/{roomCode}/room', [\App\Http\Controllers\ChatRoomController::class, 'showRoom'])
+        ->middleware('chat.session')
+        ->name('chat.room');
 });
 
 

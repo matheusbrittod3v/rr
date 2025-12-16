@@ -82,34 +82,24 @@ class ChatRoomController extends Controller
 
     /**
      * Exibe a sala de chat
-     * Apenas renderiza — NÃO autentica
+     * 
+     * Controller 100% "burro" - autenticação isolada no middleware
+     * Apenas renderiza a view
      */
     public function showRoom(Request $request, string $roomCode)
     {
-        /**
-         * Segurança: se não estiver autenticado,
-         * nunca tenta "corrigir" estado aqui
-         */
-        if (!$this->chatService->isAuthenticated($roomCode)) {
-            return redirect()->route('chat.login', $roomCode);
-        }
-
-        /**
-         * Garante que a sessão já está escrita
-         * antes da view carregar (Echo conecta ao abrir a página)
-         */
-        $request->session()->save();
-
-        Log::info('ChatRoomController: Sala de chat carregada', [
-            'roomCode'                => $roomCode,
-            'session_id'              => session()->getId(),
-            'authenticated_chat_room' => session('authenticated_chat_room'),
-            'chat_user_role'          => session('chat_user_role'),
-        ]);
+        // Middleware já garantiu autenticação e salvou a sessão
+        // Aqui apenas buscamos dados e renderizamos
 
         $chatRoom = ChatRoom::where('room_code', $roomCode)
             ->with('messages')
             ->firstOrFail();
+
+        Log::info('ChatRoomController: Sala de chat carregada', [
+            'roomCode' => $roomCode,
+            'session_id' => session()->getId(),
+            'role' => session('chat_user_role'),
+        ]);
 
         return view('chat.room', [
             'chatRoom' => $chatRoom,
