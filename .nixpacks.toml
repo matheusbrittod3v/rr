@@ -6,6 +6,9 @@ nixPkgs = [
   "nginx"
 ]
 
+# Pin to a specific Nixpkgs archive for reproducibility (Node 18.x LTS)
+nixPkgsArchive = "a5a5e4ccc0c1b30c13a8c5f6aafbefd8fc66ec1a"
+
 phpExtensions = [
   "bcmath",
   "ctype",
@@ -25,11 +28,14 @@ phpExtensions = [
 [phases.install]
 cmds = [
   "composer install --no-dev --optimize-autoloader --no-interaction",
-  "echo '=== Verificando Node.js ==='",
-  "node --version || (echo 'ERRO: Node.js não encontrado!' && exit 1)",
-  "npm --version || (echo 'ERRO: NPM não encontrado!' && exit 1)",
+  "echo '=== Verificando Node.js e NPM ==='",
+  "node --version",
+  "npm --version",
+  "echo '=== Atualizando NPM para última versão estável ==='",
+  "npm install -g npm@latest || true",
+  "npm --version",
   "echo '=== Instalando dependências NPM (incluindo devDependencies para build) ==='",
-  "if [ -f package-lock.json ]; then npm ci; else npm install; fi",
+  "if [ -f package-lock.json ]; then npm ci --include=dev; else npm install --include=dev; fi",
   "echo '=== Dependências instaladas com sucesso ==='"
 ]
 
@@ -39,7 +45,7 @@ cmds = [
   "node --version",
   "npm --version",
   "echo '=== Executando npm run build ==='",
-  "npm run build || (echo 'ERRO no build! Verificando dependências...' && npm install && npm run build)",
+  "npm run build || (echo 'ERRO no build! Reinstalando dependências...' && rm -rf node_modules && npm install --include=dev && npm run build)",
   "echo '=== Verificando se build foi gerado ==='",
   "ls -la public/build/ || echo 'AVISO: Diretório public/build não encontrado'",
   "echo '=== Build concluído com sucesso ==='",
@@ -55,4 +61,5 @@ cmd = "{nginx_start_serving_cmd}"
 [variables]
 NIXPACKS_PHP_ROOT_DIR = "/app/public"
 NIXPACKS_NODE_VERSION = "18"
-NODE_ENV = "production" 
+NPM_CONFIG_PRODUCTION = "false"
+NODE_ENV = "production"

@@ -207,6 +207,7 @@ const CHAT_CONFIG = @json($chatConfig);
 
 // ========== CONFIGURAÇÃO DO CHAT ==========
 let publicChannel = null;
+let privateChannel = null;
 let isConnected = false;
 let typingTimeout = null;
 
@@ -371,7 +372,7 @@ function initializeChat() {
         try {
             // Criar canal público (sem prefixo "private-")
             publicChannel = window.Echo.channel(channelName);
-            privateChannel = publicChannel; // Manter a variável para compatibilidade
+            privateChannel = publicChannel; // Alias para compatibilidade
             
             // Listener para quando o canal é subscrito
             privateChannel.subscribed(() => {
@@ -793,31 +794,19 @@ const CallManager = {
         }
     },
     
-    // Iniciar Chamada (Outgoing)
-    async startCall(type) {
-        this.state.callType = type;
-        this.state.isInitiator = true;
-        
-        // UI Outgoing
-        this.elements.outgoingModal.classList.remove('hidden');
-        SoundManager.startCalling();
-        
-        // Enviar sinal
-        await this.sendSignal('call-start', { type: type });
-        
-        // Obter media antecipadamente
+    // Processar ICE candidate recebido
+    async handleIceCandidate(candidate) {
+        if (!this.state.peerConnection || !candidate) return;
         try {
-            const constraints = {
-                audio: true,
-                video: type === 'video' ? { facingMode: 'user' } : false
-            };
-            this.state.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            await this.state.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            console.log('[CallManager] ICE candidate adicionado');
         } catch (error) {
-            console.error('Erro media:', error);
-            alert('Erro ao acessar mídia. Verifique permissões.');
-            this.cancelCall();
+            console.error('[CallManager] Erro ao adicionar ICE candidate:', error);
         }
     },
+    
+    // Iniciar Chamada (Outgoing) - Método PRINCIPAL
+    // Nota: Os métodos duplicados foram removidos, mantendo apenas esta versão corrigida
     
     // Cancelar (Quem ligou desiste)
     cancelCall() {
@@ -842,134 +831,38 @@ const CallManager = {
         }
     },
     
-    // Aceitar Chamada
-    async acceptCall() {
-        SoundManager.stop();
-        if (navigator.vibrate) navigator.vibrate(0); // Parar vibração
-        
-        this.elements.incomingModal.classList.add('hidden');
-        this.elements.outgoingModal.classList.add('hidden');
-        this.showCallInterface();
-        this.state.isInitiator = false;
-        
-        try {
-            // Obter media se não tiver (quem recebe)
-            if (!this.state.localStream) {
-                const constraints = {
-                    audio: true,
-                    video: this.state.callType === 'video' ? { facingMode: 'user' } : false
-                };
-                this.state.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            }
-            
-            this.elements.localVideo.srcObject = this.state.localStream;
-            
-            this.createPeerConnection();
-            
-            this.state.localStream.getTracks().forEach(track => {
-                this.state.peerConnection.addTrack(track, this.state.localStream);
-            });
-            
-            // Quem recebe aguarda offer
-            
-        } catch (error) {
-            console.error('Erro accept:', error);
-            this.endCall(false);
-        }
-    },
-    
-    // Lógica quando o outro lado aceita e envia Offer (quem ligou)
-    // O fluxo é: Liga -> call-start -> Recebe offer?
-    // Não, WebRTC normal: Initiator cria Offer. 
-    // Correção: Initiator (quem ligou) deve criar Offer ASSIM que o outro atender?
-    // Ou Initiator cria Offer e manda junto com call-start?
-    // Melhor approach: Initiator cria Peer e Offer imediatamente e manda.
-    // O outro lado recebe offer, mostra modal. Se aceitar, processa offer e manda answer.
-    
-    // REVISÃO DO HANDLE OFFER PARA SUPORTAR O BOTAO DE ACEITAR
-    // Se receber Offer e modal estiver visivel, apenas guardamos o Offer.
+    // Estado para offer pendente (quando recebemos offer antes de aceitar)
     pendingOffer: null,
     
+    // Handler para offer recebido
     async handleOffer(offer) {
-        // Se ainda estamos no modal, guardar offer
+        // Se modal de chamada recebida ainda visível, guardar offer para processar depois
         if (!this.elements.incomingModal.classList.contains('hidden')) {
             this.pendingOffer = offer;
+            console.log('[CallManager] Offer guardado, aguardando aceite');
             return;
         }
         
-        // Se já aceitou (interface visivel), processar
+        // Se já aceitou (interface visível), processar imediatamente
         await this.processOffer(offer);
     },
     
+    // Processar offer (criar answer)
     async processOffer(offer) {
-         if (!this.state.peerConnection) return;
-         try {
+        if (!this.state.peerConnection) {
+            console.error('[CallManager] PeerConnection não existe');
+            return;
+        }
+        try {
             await this.state.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
             const answer = await this.state.peerConnection.createAnswer();
             await this.state.peerConnection.setLocalDescription(answer);
             this.sendSignal('answer', answer);
-        } catch (e) {
-            console.error('Erro offer:', e);
+            console.log('[CallManager] Answer enviado');
+        } catch (error) {
+            console.error('[CallManager] Erro ao processar offer:', error);
         }
     },
-    
-    // Sobrescrevendo a logica de aceitar para processar offer pendente
-    async acceptCallCorrected() {
-        // ... (logica de UI e media igual acima) ...
-        // INJETAR ISSO NO FIM DO ACCEPTCALL ORIGINAL:
-        
-        // Se sou quem recebeu, agora configuro meu Peer
-        // E verifico se tem offer pendente
-        if (this.pendingOffer) {
-            this.createPeerConnection();
-             this.state.localStream.getTracks().forEach(track => {
-                this.state.peerConnection.addTrack(track, this.state.localStream);
-            });
-            await this.processOffer(this.pendingOffer);
-            this.pendingOffer = null;
-        }
-    },
-    
-    // VAMOS REESCREVER O STARTCALL PARA INICIAR O PEER IMEDIATAMENTE
-    async startCallRevisited(type) {
-        this.state.callType = type;
-        this.state.isInitiator = true;
-        
-        this.elements.outgoingModal.classList.remove('hidden');
-        SoundManager.startCalling();
-        
-        try {
-            const constraints = {
-                audio: true,
-                video: type === 'video' ? { facingMode: 'user' } : false
-            };
-            this.state.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            this.elements.localVideo.srcObject = this.state.localStream;
-            
-            // Criar Peer e Offer JÁ
-            this.createPeerConnection();
-            this.state.localStream.getTracks().forEach(track => {
-                this.state.peerConnection.addTrack(track, this.state.localStream);
-            });
-            
-            const offer = await this.state.peerConnection.createOffer();
-            await this.state.peerConnection.setLocalDescription(offer);
-            
-            // Mandar Sinais
-            await this.sendSignal('call-start', { type: type });
-            await this.sendSignal('offer', offer);
-            
-            // Agora espera Answer...
-            
-        } catch (e) {
-            console.error('Erro start:', e);
-            this.cancelCall();
-        }
-    },
-    
-    // ... Implementação real substituindo os métodos ...
-    
-    // ---------- MÉTODOS REAIS (Substitua os anteriores) -----------
     
     async startCall(type) {
         this.state.callType = type;
@@ -1294,20 +1187,40 @@ const CallManager = {
     },
      
     async flipCamera() {
-        // ... (manter lógica anterior ou adaptar se necessário) ...
-        // Simplificado para brevidade, assumindo lógica anterior funcional
-         this.state.isFrontCamera = !this.state.isFrontCamera;
-        const constraints = { audio: true, video: { facingMode: this.state.isFrontCamera ? 'user' : 'environment' } };
+        if (!this.state.localStream || !this.state.peerConnection) return;
+        
+        this.state.isFrontCamera = !this.state.isFrontCamera;
+        
         try {
-            this.state.localStream.getTracks().forEach(t => t.stop());
-            const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-            this.state.localStream = newStream;
-            this.elements.localVideo.srcObject = newStream;
-            const videoTrack = newStream.getVideoTracks()[0];
-            const sender = this.state.peerConnection.getSenders().find(s => s.track.kind === 'video');
-            if (sender) sender.replaceTrack(videoTrack);
-        } catch (e) {
-            console.error(e);
+            // Parar apenas o track de vídeo, manter áudio
+            const oldVideoTrack = this.state.localStream.getVideoTracks()[0];
+            if (oldVideoTrack) oldVideoTrack.stop();
+            
+            // Obter nova stream apenas de vídeo
+            const constraints = { 
+                video: { facingMode: this.state.isFrontCamera ? 'user' : 'environment' } 
+            };
+            const newVideoStream = await navigator.mediaDevices.getUserMedia(constraints);
+            const newVideoTrack = newVideoStream.getVideoTracks()[0];
+            
+            // Substituir track no PeerConnection
+            const sender = this.state.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) {
+                await sender.replaceTrack(newVideoTrack);
+            }
+            
+            // Atualizar localStream (remover track antigo, adicionar novo)
+            if (oldVideoTrack) this.state.localStream.removeTrack(oldVideoTrack);
+            this.state.localStream.addTrack(newVideoTrack);
+            
+            // Atualizar vídeo local
+            this.elements.localVideo.srcObject = this.state.localStream;
+            
+            console.log('[CallManager] Câmera alternada para:', this.state.isFrontCamera ? 'frontal' : 'traseira');
+        } catch (error) {
+            console.error('[CallManager] Erro ao alternar câmera:', error);
+            // Reverter estado se falhar
+            this.state.isFrontCamera = !this.state.isFrontCamera;
         }
     }
 };
