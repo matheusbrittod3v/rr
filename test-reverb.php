@@ -72,7 +72,7 @@ $connector("$scheme://$host:$port/app/$appKey", [
             $conn->send(json_encode([
                 'event' => 'pusher:subscribe',
                 'data' => [
-                    'channel' => 'chat-room.test', // Changed from 'private-test' to 'chat-room.test'
+                    'channel' => 'chat-room.test',
                 ],
             ]));
         }
@@ -83,7 +83,7 @@ $connector("$scheme://$host:$port/app/$appKey", [
             // Send a test event
             $conn->send(json_encode([
                 'event' => 'client-test-event',
-                'channel' => 'chat-room.test', // Changed from 'private-test' to 'chat-room.test'
+                'channel' => 'chat-room.test',
                 'data' => json_encode([
                     'message' => 'Hello from WebSocket test!',
                 ]),
@@ -104,7 +104,7 @@ $connector("$scheme://$host:$port/app/$appKey", [
         'event' => 'pusher:subscribe',
         'data' => [
             'auth' => '',
-            'channel' => 'chat-room.test', // Changed from 'private-test' to 'chat-room.test'
+            'channel' => 'chat-room.test',
         ],
     ]));
     

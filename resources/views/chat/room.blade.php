@@ -830,10 +830,20 @@ const CallManager = {
                 this.handleCallBusy();
                 break;
             case 'call-accept':
-                // Outro lado aceitou, limpar timeout
-                this.clearCallTimeout();
+                // Outro lado aceitou a chamada! 
+                this.handleCallAccepted();
                 break;
         }
+    },
+    
+    // Handler quando outro lado aceita a chamada
+    handleCallAccepted() {
+        console.log('[CallManager] Chamada aceita pelo outro usuário!');
+        this.clearCallTimeout();
+        this.state.connectionState = 'connecting';
+        // Mostrar feedback que foi aceita, aguardando conexão WebRTC
+        this.showToast('Chamada aceita! Conectando...');
+        // A interface só muda quando receber o answer com a mídia
     },
     
     // Processar ICE candidate recebido (com queue)
@@ -947,17 +957,37 @@ const CallManager = {
     // Processar offer (criar answer)
     async processOffer(offer) {
         if (!this.state.peerConnection) {
-            console.error('[CallManager] PeerConnection não existe');
+            console.error('[CallManager] PeerConnection não existe para processar offer');
             return;
         }
+        
         try {
-            await this.state.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            console.log('[CallManager] Processando offer...');
+            
+            // Criar RTCSessionDescription do offer
+            const offerDesc = new RTCSessionDescription(offer);
+            await this.state.peerConnection.setRemoteDescription(offerDesc);
+            console.log('[CallManager] Remote description setada');
+            
+            // Criar answer
             const answer = await this.state.peerConnection.createAnswer();
             await this.state.peerConnection.setLocalDescription(answer);
-            this.sendSignal('answer', answer);
-            console.log('[CallManager] Answer enviado');
+            console.log('[CallManager] Local description setada');
+            
+            // Enviar answer como objeto simples (type + sdp)
+            const answerData = {
+                type: answer.type,
+                sdp: answer.sdp
+            };
+            this.sendSignal('answer', answerData);
+            console.log('[CallManager] Answer enviado:', answerData.type);
+            
+            // Processar ICE candidates pendentes
+            await this.processIceCandidateQueue();
+            
         } catch (error) {
             console.error('[CallManager] Erro ao processar offer:', error);
+            this.showToast('Erro na conexão');
         }
     },
     
@@ -1011,8 +1041,15 @@ const CallManager = {
             const offer = await this.state.peerConnection.createOffer();
             await this.state.peerConnection.setLocalDescription(offer);
             
+            // Serializar offer como objeto simples
+            const offerData = {
+                type: offer.type,
+                sdp: offer.sdp
+            };
+            
             this.sendSignal('call-start', { type: type });
-            this.sendSignal('offer', offer);
+            this.sendSignal('offer', offerData);
+            console.log('[CallManager] Offer enviado');
             
         } catch (error) {
             console.error('[CallManager] Erro ao iniciar chamada:', error);
@@ -1053,22 +1090,29 @@ const CallManager = {
             
             this.state.localStream = await navigator.mediaDevices.getUserMedia(constraints);
             this.elements.localVideo.srcObject = this.state.localStream;
+            console.log('[CallManager] Local stream obtido');
             
             // Se já tem peer (de tentativas anteriores), fecha
-            if (this.state.peerConnection) this.state.peerConnection.close();
+            if (this.state.peerConnection) {
+                this.state.peerConnection.close();
+                this.state.peerConnection = null;
+            }
             
             this.createPeerConnection();
+            console.log('[CallManager] PeerConnection criado');
             
             this.state.localStream.getTracks().forEach(track => {
                 this.state.peerConnection.addTrack(track, this.state.localStream);
+                console.log('[CallManager] Track adicionado:', track.kind);
             });
             
-            // Se tem offer guardado
+            // Se tem offer guardado, processar agora
             if (this.pendingOffer) {
+                console.log('[CallManager] Processando offer pendente...');
                 await this.processOffer(this.pendingOffer);
                 this.pendingOffer = null;
-                // Processar ICE candidates que chegaram antes
-                await this.processIceCandidateQueue();
+            } else {
+                console.log('[CallManager] Sem offer pendente, aguardando...');
             }
             
         } catch (error) {
@@ -1239,10 +1283,16 @@ const CallManager = {
         this.startTimer();
         this.startStats();
         
-        // ICE candidate
+        // ICE candidate - serializar corretamente
         this.state.peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
-                this.sendSignal('ice-candidate', event.candidate);
+                // Serializar candidate como objeto simples
+                const candidateData = {
+                    candidate: event.candidate.candidate,
+                    sdpMid: event.candidate.sdpMid,
+                    sdpMLineIndex: event.candidate.sdpMLineIndex
+                };
+                this.sendSignal('ice-candidate', candidateData);
             }
         };
         
@@ -1313,7 +1363,8 @@ const CallManager = {
             try {
                 const offer = await this.state.peerConnection.createOffer({ iceRestart: true });
                 await this.state.peerConnection.setLocalDescription(offer);
-                this.sendSignal('offer', offer);
+                const offerData = { type: offer.type, sdp: offer.sdp };
+                this.sendSignal('offer', offerData);
             } catch (e) {
                 console.error('[CallManager] Erro ao tentar reconexão:', e);
             }
