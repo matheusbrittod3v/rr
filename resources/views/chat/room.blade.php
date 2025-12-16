@@ -1166,7 +1166,6 @@ const CallManager = {
         }
         
         try {
-        try {
             // Decodificar Base64 se necessário
             let sdp = answer.sdp;
             if (!answer.sdp.includes('v=0')) {
