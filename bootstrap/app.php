@@ -21,9 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'chat.session' => ChatSessionMiddleware::class,
         ]);
         
-        // Substituir o middleware CSRF padrão pelo nosso customizado no grupo web
-        $middleware->web(replace: [
-            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class => VerifyCsrfToken::class,
+        // Remover middleware CSRF do grupo web (desativado)
+        $middleware->web(remove: [
+            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
         ]);
         
         // Trust proxies para funcionar atrás de Nginx/Cloudflare/etc
