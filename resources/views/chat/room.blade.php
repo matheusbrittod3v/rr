@@ -694,20 +694,64 @@ const CallManager = {
     // Config WebRTC - Otimizado para máxima estabilidade
     config: {
         iceServers: [
+            // Google STUN servers
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
             { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' }
+            { urls: 'stun:stun4.l.google.com:19302' },
+            
+            // TURN servers gratuitos (CRÍTICO para NAT travessia)
+            // OpenRelay - Serviço TURN gratuito e aberto
+            {
+                urls: 'turn:openrelay.metered.ca:80',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            {
+                urls: 'turn:openrelay.metered.ca:443',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            {
+                urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            
+            // Metered TURN (gratuito com limite)
+            {
+                urls: 'stun:stun.relay.metered.ca:80'
+            },
+            {
+                urls: 'turn:global.relay.metered.ca:80',
+                username: 'e8dd65f87acd23a0c1ba935d',
+                credential: ''
+            },
+            {
+                urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+                username: 'e8dd65f87acd23a0c1ba935d',
+                credential: ''
+            },
+            {
+                urls: 'turn:global.relay.metered.ca:443',
+                username: 'e8dd65f87acd23a0c1ba935d',
+                credential: ''
+            },
+            {
+                urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+                username: 'e8dd65f87acd23a0c1ba935d',
+                credential: ''
+            }
         ],
         // Configurações de ICE mais agressivas
         iceCandidatePoolSize: 10, // Pré-gerar candidates
-        iceTransportPolicy: 'all', // Usar todos os transports disponíveis
+        iceTransportPolicy: 'all', // IMPORTANTE: Aceita relay (TURN) quando necessário
         bundlePolicy: 'max-bundle', // Agrupar mídia em uma conexão
         rtcpMuxPolicy: 'require', // Multiplexar RTCP
         
         callTimeout: 60000, // 60 segundos para atender (mais tempo)
-        connectionTimeout: 30000, // 30 segundos para estabelecer conexão WebRTC
+        connectionTimeout: 45000, // 45 segundos para estabelecer (TURN pode demorar mais)
         reconnectDelay: 1500, // Delay inicial de reconexão
         maxReconnectAttempts: 5, // Mais tentativas
         reconnectBackoffMultiplier: 1.5, // Exponential backoff
@@ -1428,16 +1472,26 @@ const CallManager = {
         this.state.peerConnection.addTransceiver('video', { direction: 'sendrecv' });
         console.log('[CallManager] 📡 Transceivers bidirecionais configurados');
         
-        // ICE candidate - serializar corretamente
+        // ICE candidate - serializar corretamente e mostrar tipo
         this.state.peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
+                const candidateStr = event.candidate.candidate;
+                
+                // Identificar tipo de candidate
+                let candidateType = 'unknown';
+                if (candidateStr.includes('typ host')) candidateType = '🏠 host (local)';
+                else if (candidateStr.includes('typ srflx')) candidateType = '🌐 srflx (STUN)';
+                else if (candidateStr.includes('typ relay')) candidateType = '🔄 relay (TURN)';
+                else if (candidateStr.includes('typ prflx')) candidateType = '🔀 prflx (peer-reflexive)';
+                
                 // Serializar candidate como objeto simples
                 const candidateData = {
                     candidate: event.candidate.candidate,
                     sdpMid: event.candidate.sdpMid,
                     sdpMLineIndex: event.candidate.sdpMLineIndex
                 };
-                console.log('[CallManager] 🧊 ICE candidate gerado:', event.candidate.candidate.substring(0, 50) + '...');
+                
+                console.log(`[CallManager] 🧊 ICE candidate [${candidateType}]:`, candidateStr.substring(0, 60) + '...');
                 this.sendSignal('ice-candidate', candidateData);
             }
         };
@@ -1469,7 +1523,7 @@ const CallManager = {
         };
         
         // ICE connection state (mais confiável para detectar problemas)
-        this.state.peerConnection.oniceconnectionstatechange = () => {
+        this.state.peerConnection.oniceconnectionstatechange = async () => {
             const state = this.state.peerConnection.iceConnectionState;
             console.log('[CallManager] 🌐 ICE Connection State:', state);
             
@@ -1479,6 +1533,9 @@ const CallManager = {
                 this.state.isReconnecting = false;
                 this.clearConnectionTimeout();
                 console.log('[CallManager] ✓✓✓ Conexão estabelecida com sucesso!');
+                
+                // Mostrar qual tipo de candidate foi usado
+                this.logSelectedCandidatePair();
                 this.showToast('Conectado!', 2000);
                 
             } else if (state === 'disconnected') {
@@ -1492,6 +1549,9 @@ const CallManager = {
                 
             } else if (state === 'failed') {
                 console.error('[CallManager] ✗ Conexão falhou!');
+                
+                // Diagnóstico: mostrar candidates disponíveis
+                await this.diagnoseConnectionFailure();
                 
                 if (this.state.reconnectAttempts < this.config.maxReconnectAttempts) {
                     this.attemptReconnect();
@@ -1589,6 +1649,81 @@ const CallManager = {
             clearInterval(this.state.heartbeatInterval);
             this.state.heartbeatInterval = null;
         }
+    },
+    
+    // Diagnóstico: Mostrar par de candidates selecionado
+    async logSelectedCandidatePair() {
+        try {
+            const stats = await this.state.peerConnection.getStats();
+            stats.forEach(report => {
+                if (report.type === 'candidate-pair' && report.nominated && report.state === 'succeeded') {
+                    console.log('[CallManager] 🎯 Par de candidates SELECIONADO:', {
+                        local: report.localCandidateId,
+                        remote: report.remoteCandidateId,
+                        state: report.state,
+                        bytesReceived: report.bytesReceived,
+                        bytesSent: report.bytesSent
+                    });
+                    
+                    // Mostrar detalhes dos candidates locais e remotos
+                    stats.forEach(r => {
+                        if (r.id === report.localCandidateId) {
+                            let type = '';
+                            if (r.candidateType === 'host') type = '🏠 host (local)';
+                            else if (r.candidateType === 'srflx') type = '🌐 srflx (STUN)';
+                            else if (r.candidateType === 'relay') type = '🔄 relay (TURN)';
+                            console.log(`[CallManager] └─ Local: ${type} - ${r.ip || r.address}:${r.port}`);
+                        }
+                        if (r.id === report.remoteCandidateId) {
+                            let type = '';
+                            if (r.candidateType === 'host') type = '🏠 host (local)';
+                            else if (r.candidateType === 'srflx') type = '🌐 srflx (STUN)';
+                            else if (r.candidateType === 'relay') type = '🔄 relay (TURN)';
+                            console.log(`[CallManager] └─ Remote: ${type} - ${r.ip || r.address}:${r.port}`);
+                        }
+                    });
+                }
+            });
+        } catch (e) {
+            console.error('[CallManager] Erro ao obter par de candidates:', e);
+        }
+    },
+    
+    // Diagnóstico: Quando conexão falha
+    async diagnoseConnectionFailure() {
+        console.log('[CallManager] 🔍 === DIAGNÓSTICO DE FALHA DE CONEXÃO ===');
+        
+        try {
+            const stats = await this.state.peerConnection.getStats();
+            const candidates = { host: 0, srflx: 0, relay: 0 };
+            
+            stats.forEach(report => {
+                if (report.type === 'local-candidate') {
+                    if (report.candidateType === 'host') candidates.host++;
+                    else if (report.candidateType === 'srflx') candidates.srflx++;
+                    else if (report.candidateType === 'relay') candidates.relay++;
+                }
+            });
+            
+            console.log('[CallManager] 📊 Candidates locais disponíveis:', candidates);
+            
+            if (candidates.relay === 0) {
+                console.warn('[CallManager] ⚠️ NENHUM candidate TURN (relay) gerado!');
+                console.warn('[CallManager] → Possível problema: Servidores TURN indisponíveis ou bloqueados');
+                console.warn('[CallManager] → Solução: Verificar firewall ou usar servidor TURN próprio');
+            }
+            
+            if (candidates.srflx === 0 && candidates.relay === 0) {
+                console.error('[CallManager] ✗✗ Apenas candidates locais (host) disponíveis!');
+                console.error('[CallManager] → Isso indica NAT simétrico ou firewall muito restritivo');
+                console.error('[CallManager] → É IMPOSSÍVEL conectar sem TURN neste cenário');
+            }
+            
+        } catch (e) {
+            console.error('[CallManager] Erro no diagnóstico:', e);
+        }
+        
+        console.log('[CallManager] 🔍 === FIM DO DIAGNÓSTICO ===');
     },
     
     // Tentativa de reconexão com Exponential Backoff
