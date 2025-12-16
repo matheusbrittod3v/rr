@@ -19,9 +19,18 @@ class ChatRoomController extends Controller
     /**
      * Exibe a página de login da sala de chat
      */
-    public function showLogin(string $roomCode)
+    public function showLogin(Request $request, string $roomCode)
     {
         $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
+
+        // Garantir que a sessão está iniciada (não regenerar token - isso causaria 419)
+        if ($request->hasSession()) {
+            Log::debug('ChatRoomController: Página de login exibida', [
+                'roomCode' => $roomCode,
+                'session_id' => $request->session()->getId(),
+                'csrf_token_exists' => !empty($request->session()->token()),
+            ]);
+        }
 
         return view('chat.login', [
             'roomCode' => $roomCode,
@@ -35,6 +44,15 @@ class ChatRoomController extends Controller
      */
     public function authenticate(Request $request, string $roomCode)
     {
+        // Log para debug do CSRF
+        Log::debug('ChatRoomController: Tentativa de autenticação', [
+            'roomCode' => $roomCode,
+            'has_session' => $request->hasSession(),
+            'session_id' => $request->hasSession() ? $request->session()->getId() : null,
+            'csrf_token_in_request' => $request->has('_token'),
+            'csrf_token_in_header' => $request->hasHeader('X-CSRF-TOKEN'),
+        ]);
+
         $request->validate([
             'password' => ['required', 'string'],
         ]);
