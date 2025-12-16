@@ -45,6 +45,20 @@ class ChatRoomsTable
                     ->searchable()
                     ->icon('heroicon-o-phone')
                     ->default('N/A'),
+
+                TextColumn::make('client_password')
+                    ->label('Senha Cliente')
+                    ->searchable()
+                    ->copyable()
+                    ->icon('heroicon-o-key')
+                    ->toggleable(),
+
+                TextColumn::make('provider_password')
+                    ->label('Senha Provider')
+                    ->searchable()
+                    ->copyable()
+                    ->icon('heroicon-o-lock-closed')
+                    ->toggleable(),
                     
                 TextColumn::make('payment.orcamento.filaOrcamento.prestador.name')
                     ->label('Prestador')

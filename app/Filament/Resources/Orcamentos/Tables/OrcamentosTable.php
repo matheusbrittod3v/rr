@@ -19,6 +19,11 @@ class OrcamentosTable
                     ->label('ID')
                     ->sortable()
                     ->searchable(),
+                TextColumn::make('id_orcamento')
+                    ->label('ID Orçamento')
+                    ->sortable()
+                    ->searchable()
+                    ->copyable(),
                 TextColumn::make('numero')
                     ->label('Telefone/Número')
                     ->sortable()

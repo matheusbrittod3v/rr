@@ -861,9 +861,9 @@
                         <div class="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center mr-2">
                             <span class="text-white font-bold text-xl">TT</span>
                         </div>
-                        <h2 class="text-2xl font-bold">renttool<span class="text-primary">.com</span></h2>
+                        <h2 class="text-2xl font-bold">uniontechnicals<span class="text-primary">.com</span></h2>
                     </div>
-                    <p class="text-slate-400 mb-6">Aluguel profissional de ferramentas de reparo de software de celulares. Economize dinheiro com nosso sistema de preços por hora.</p>
+                    <p class="text-slate-400 mb-6">Plataforma líder em conexão com especialistas em reparo de software. Soluções rápidas, seguras e remotas para seu dispositivo.</p>
                     <div class="flex space-x-4">
                         <a href="#" class="text-slate-400 hover:text-white">
                             <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/></svg>
@@ -897,8 +897,8 @@
                 </div>
             </div>
             
-            <div class="border-t border-slate-800 mt-12 pt-8 text-center text-slate-400">
-                <p>&copy; 2025 renttool.com. Todos os direitos reservados. Aluguel profissional de ferramentas de reparo de software de celulares. --Projetado por @Matheus.britto.dev</p>
+            <div class="border-t border-slate-800 mt-12 pt-8 text-center text-slate-500">
+                <p>&copy; 2025 uniontechnicals.com. Todos os direitos reservados. Plataforma de conexão profissional.</p>
             </div>
         </div>
     </footer>
