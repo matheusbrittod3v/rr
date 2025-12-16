@@ -2,9 +2,16 @@
 
 use Illuminate\Support\Facades\Broadcast;
 
-// Public channel - no authentication required
-Broadcast::channel('chat-room.{roomCode}', function ($user, $roomCode) {
-    // Allow anyone to join the channel
-    return true;
+/*
+|--------------------------------------------------------------------------
+| Broadcast Channels
+|--------------------------------------------------------------------------
+*/
+
+Broadcast::routes([
+    'middleware' => ['web'],
+]);
+
+Broadcast::channel('chat-room.{roomCode}', function ($user = null, string $roomCode) {
+    return session('authenticated_chat_room') === $roomCode;
 });
- 

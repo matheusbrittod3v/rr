@@ -16,8 +16,7 @@ Route::get('/', [HomeController::class, 'index']);
 
 Route::get('/sitemap.xml', [SitemapController::class, 'index']);
 
-// Rotas de broadcasting para autorização de canais privados
-Broadcast::routes(['middleware' => ['web']]);
+
 
 // Rota de debug para verificar sessão (remover em produção)
 Route::get('/debug-session', function () {
