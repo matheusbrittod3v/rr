@@ -44,6 +44,9 @@
                 </div>
             </div>
 
+            <!-- Call Interface -->
+            @include('chat.partials.call-interface')
+
             <!-- Messages Container -->
             <div id="chat-messages" class="h-[500px] overflow-y-auto p-6 bg-gradient-to-b from-white to-gray-50 scroll-smooth">
                 @forelse($chatRoom->messages as $message)
@@ -174,6 +177,20 @@
     #chat-messages::-webkit-scrollbar-thumb { 
         background: #cbd5e1; 
         border-radius: 10px; 
+    }
+    #local-video {
+        transform: scaleX(-1); /* Mirror effect for local video */
+    }
+    
+    /* Mobile responsive adjustments */
+    @media (max-width: 640px) {
+        #local-video-container {
+            width: 100px;
+            height: 140px;
+            bottom: 100px;
+            top: auto;
+            right: 16px;
+        }
     }
 </style>
 
@@ -475,6 +492,14 @@ function initializeChat() {
                 }
             });
             
+            // Listener para sinais de chamada (WebRTC)
+            publicChannel.listen('.call.signal', (data) => {
+                CallManager.handleSignal(data);
+            });
+            
+            // Inicializar sistema de chamadas
+            CallManager.init();
+
             // Listener para status de conexão WebSocket
             if (window.Echo.connector && window.Echo.connector.pusher) {
                 const pusher = window.Echo.connector.pusher;
@@ -570,6 +595,453 @@ async function sendMessage() {
         elements.sendButton.classList.remove('opacity-50', 'cursor-not-allowed', 'sending');
     }
 }
+
+// ========== WEBRTC CALL SYSTEM ==========
+
+const CallManager = {
+    // Configuração
+    config: {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' }
+        ]
+    },
+    
+    // Estado
+    state: {
+        localStream: null,
+        remoteStream: null,
+        peerConnection: null,
+        isCallActive: false,
+        isAudioMuted: false,
+        isVideoOff: false,
+        callType: 'voice', // 'voice', 'video'
+        startTime: null,
+        timerInterval: null,
+        isInitiator: false,
+        isFrontCamera: true
+    },
+    
+    // Elementos UI
+    elements: {
+        voiceBtn: document.getElementById('voice-call-btn'),
+        videoBtn: document.getElementById('video-call-btn'),
+        incomingModal: document.getElementById('incoming-call-modal'),
+        callInterface: document.getElementById('call-interface'),
+        localVideo: document.getElementById('local-video'),
+        remoteVideo: document.getElementById('remote-video'),
+        minimizedCall: document.getElementById('minimized-call'),
+        minimizedVideo: document.getElementById('minimized-video'),
+        acceptBtn: document.getElementById('accept-call-btn'),
+        rejectBtn: document.getElementById('reject-call-btn'),
+        endBtn: document.getElementById('end-call-btn'),
+        micBtn: document.getElementById('toggle-mic-btn'),
+        cameraBtn: document.getElementById('toggle-camera-btn'),
+        minimizeBtn: document.getElementById('minimize-call-btn'),
+        flipBtn: document.getElementById('flip-camera-btn'),
+        callerName: document.getElementById('caller-name'),
+        callTypeLabel: document.getElementById('call-type-label'),
+        callDuration: document.getElementById('call-duration')
+    },
+    
+    // Inicializar
+    init() {
+        this.addEventListeners();
+        console.log('[CallManager] Inicializado');
+    },
+    
+    // Listeners
+    addEventListeners() {
+        this.elements.voiceBtn?.addEventListener('click', () => this.startCall('voice'));
+        this.elements.videoBtn?.addEventListener('click', () => this.startCall('video'));
+        this.elements.acceptBtn?.addEventListener('click', () => this.acceptCall());
+        this.elements.rejectBtn?.addEventListener('click', () => this.rejectCall());
+        this.elements.endBtn?.addEventListener('click', () => this.endCall());
+        this.elements.micBtn?.addEventListener('click', () => this.toggleMic());
+        this.elements.cameraBtn?.addEventListener('click', () => this.toggleCamera());
+        this.elements.minimizeBtn?.addEventListener('click', () => this.toggleMinimize());
+        this.elements.flipBtn?.addEventListener('click', () => this.flipCamera());
+        
+        // Listener para fechar modal se clicar fora (opcional)
+        // this.elements.incomingModal?.addEventListener('click', (e) => {
+        //     if (e.target === this.elements.incomingModal) this.rejectCall();
+        // });
+    },
+    
+    // Sinalização
+    async sendSignal(type, data = null) {
+        try {
+            await fetch(`${CHAT_CONFIG.apiBaseUrl}/${CHAT_CONFIG.roomCode}/call-signal`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify({
+                    signal_type: type,
+                    signal_data: data
+                })
+            });
+        } catch (error) {
+            console.error('[CallManager] Erro ao enviar sinal:', error);
+        }
+    },
+    
+    // Handler de eventos recebidos (chamado pelo Echo listener)
+    handleSignal(data) {
+        // Ignorar próprios sinais
+        if (data.sender_type === CHAT_CONFIG.senderType) return;
+        
+        console.log('[CallManager] Sinal recebido:', data.signal_type);
+        
+        switch (data.signal_type) {
+            case 'call-start':
+                this.handleIncomingCall(data.signal_data);
+                break;
+            case 'call-end':
+                this.handleCallEnded();
+                break;
+            case 'call-reject':
+                this.handleCallRejected();
+                break;
+            case 'offer':
+                this.handleOffer(data.signal_data);
+                break;
+            case 'answer':
+                this.handleAnswer(data.signal_data);
+                break;
+            case 'ice-candidate':
+                this.handleIceCandidate(data.signal_data);
+                break;
+        }
+    },
+    
+    // Iniciar Chamada
+    async startCall(type) {
+        this.state.callType = type;
+        this.state.isInitiator = true;
+        
+        // Mostrar interface
+        this.showCallInterface();
+        
+        // Obter media stream
+        try {
+            const constraints = {
+                audio: true,
+                video: type === 'video' ? { facingMode: 'user' } : false
+            };
+            
+            this.state.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            this.elements.localVideo.srcObject = this.state.localStream;
+            
+            // Iniciar conexão Peer
+            this.createPeerConnection();
+            
+            // Adicionar tracks locais
+            this.state.localStream.getTracks().forEach(track => {
+                this.state.peerConnection.addTrack(track, this.state.localStream);
+            });
+            
+            // Criar Offer
+            const offer = await this.state.peerConnection.createOffer();
+            await this.state.peerConnection.setLocalDescription(offer);
+            
+            // Enviar sinal de início
+            await this.sendSignal('call-start', { type: type });
+            
+            // Enviar Offer
+            await this.sendSignal('offer', offer);
+            
+        } catch (error) {
+            console.error('[CallManager] Erro ao iniciar chamada:', error);
+            alert('Erro ao acessar câmera/microfone. Verifique as permissões.');
+            this.endCall(false);
+        }
+    },
+    
+    // Receber Chamada
+    handleIncomingCall(data) {
+        if (this.state.isCallActive) {
+            // Já em chamada -> Ocupado (poderia enviar sinal de busy)
+            return;
+        }
+        
+        this.state.callType = data.type;
+        this.elements.callTypeLabel.textContent = data.type === 'video' ? 'Chamada de Vídeo' : 'Chamada de Voz';
+        
+        // Mostrar modal
+        this.elements.incomingModal.classList.remove('hidden');
+        
+        // Tocar som (opcional)
+    },
+    
+    // Aceitar Chamada
+    async acceptCall() {
+        this.elements.incomingModal.classList.add('hidden');
+        this.showCallInterface();
+        this.state.isInitiator = false;
+        
+        try {
+            const constraints = {
+                audio: true,
+                video: this.state.callType === 'video' ? { facingMode: 'user' } : false
+            };
+            
+            this.state.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            this.elements.localVideo.srcObject = this.state.localStream;
+            
+            this.createPeerConnection();
+            
+            this.state.localStream.getTracks().forEach(track => {
+                this.state.peerConnection.addTrack(track, this.state.localStream);
+            });
+            
+            // Processar Offer armazenado pendente (se houver) ou aguardar
+            // Nota: Normalmente o Offer chega logo após o call-start. 
+            // Se já tiver chegado, precisamos processar.
+            
+        } catch (error) {
+            console.error('[CallManager] Erro ao aceitar chamada:', error);
+            alert('Erro ao acessar dispositivos.');
+            this.endCall(false);
+        }
+    },
+    
+    // Rejeitar Chamada
+    rejectCall() {
+        this.elements.incomingModal.classList.add('hidden');
+        this.sendSignal('call-reject');
+    },
+    
+    // Encerrar Chamada
+    endCall(notifyRemote = true) {
+        if (notifyRemote) {
+            this.sendSignal('call-end');
+        }
+        this.resetCall();
+    },
+    
+    // Resetar estado
+    resetCall() {
+        // Parar tracks
+        if (this.state.localStream) {
+            this.state.localStream.getTracks().forEach(track => track.stop());
+        }
+        
+        // Fechar Peer Connection
+        if (this.state.peerConnection) {
+            this.state.peerConnection.close();
+        }
+        
+        // Limpar vídeos
+        this.elements.localVideo.srcObject = null;
+        this.elements.remoteVideo.srcObject = null;
+        
+        // Esconder UI
+        this.elements.callInterface.classList.add('hidden');
+        this.elements.minimizedCall.classList.add('hidden');
+        this.elements.incomingModal.classList.add('hidden');
+        
+        // Resetar estado
+        this.state = {
+            ...this.state,
+            localStream: null,
+            remoteStream: null,
+            peerConnection: null,
+            isCallActive: false
+        };
+        
+        // Parar timer
+        if (this.state.timerInterval) {
+            clearInterval(this.state.timerInterval);
+            this.state.timerInterval = null;
+        }
+    },
+    
+    // Criar Peer Connection
+    createPeerConnection() {
+        this.state.peerConnection = new RTCPeerConnection(this.config);
+        this.state.isCallActive = true;
+        this.startTimer();
+        
+        // Handler ICE Candidates
+        this.state.peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                this.sendSignal('ice-candidate', event.candidate);
+            }
+        };
+        
+        // Handler Track Recebido
+        this.state.peerConnection.ontrack = (event) => {
+            console.log('[CallManager] Stream remoto recebido');
+            this.state.remoteStream = event.streams[0];
+            this.elements.remoteVideo.srcObject = this.state.remoteStream;
+            this.elements.minimizedVideo.srcObject = this.state.remoteStream;
+        };
+        
+        // Handler Mudança de estado
+        this.state.peerConnection.onconnectionstatechange = () => {
+            console.log('[CallManager] Estado conexão:', this.state.peerConnection.connectionState);
+            if (this.state.peerConnection.connectionState === 'disconnected') {
+                this.endCall(false);
+            }
+        };
+    },
+    
+    // Handlers WebRTC
+    async handleOffer(offer) {
+        if (!this.state.peerConnection) return; // Deve ter sido criado no acceptCall
+        
+        try {
+            await this.state.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await this.state.peerConnection.createAnswer();
+            await this.state.peerConnection.setLocalDescription(answer);
+            this.sendSignal('answer', answer);
+        } catch (e) {
+            console.error('[CallManager] Erro no handleOffer:', e);
+        }
+    },
+    
+    async handleAnswer(answer) {
+        if (!this.state.peerConnection) return;
+        try {
+            await this.state.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        } catch (e) {
+            console.error('[CallManager] Erro no handleAnswer:', e);
+        }
+    },
+    
+    async handleIceCandidate(candidate) {
+        if (!this.state.peerConnection) return;
+        try {
+            await this.state.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (e) {
+            console.error('[CallManager] Erro no handleIceCandidate:', e);
+        }
+    },
+    
+    handleCallEnded() {
+        this.resetCall();
+        // Opcional: mostrar toast "Chamada encerrada"
+        alert('Chamada encerrada');
+    },
+    
+    handleCallRejected() {
+        this.resetCall();
+        alert('Chamada recusada');
+    },
+    
+    // UI Helpers
+    showCallInterface() {
+        this.elements.callInterface.classList.remove('hidden');
+        
+        // Ajustar botões conforme tipo
+        if (this.state.callType === 'voice') {
+            this.elements.cameraBtn.classList.add('hidden');
+            this.elements.flipBtn.classList.add('hidden');
+            this.elements.localVideo.classList.add('hidden');
+        } else {
+            this.elements.cameraBtn.classList.remove('hidden');
+            this.elements.flipBtn.classList.remove('hidden');
+            this.elements.localVideo.classList.remove('hidden');
+        }
+    },
+    
+    toggleMic() {
+        if (!this.state.localStream) return;
+        const audioTrack = this.state.localStream.getAudioTracks()[0];
+        if (audioTrack) {
+            audioTrack.enabled = !audioTrack.enabled;
+            this.state.isAudioMuted = !audioTrack.enabled;
+            
+            // UI Toggle
+            document.getElementById('mic-on-icon').classList.toggle('hidden');
+            document.getElementById('mic-off-icon').classList.toggle('hidden');
+            this.elements.micBtn.classList.toggle('bg-red-500');
+            this.elements.micBtn.classList.toggle('bg-white/20');
+        }
+    },
+    
+    toggleCamera() {
+        if (!this.state.localStream || this.state.callType === 'voice') return;
+        const videoTrack = this.state.localStream.getVideoTracks()[0];
+        if (videoTrack) {
+            videoTrack.enabled = !videoTrack.enabled;
+            this.state.isVideoOff = !videoTrack.enabled;
+            
+            // UI Toggle
+            document.getElementById('camera-on-icon').classList.toggle('hidden');
+            document.getElementById('camera-off-icon').classList.toggle('hidden');
+            this.elements.cameraBtn.classList.toggle('bg-red-500');
+            this.elements.cameraBtn.classList.toggle('bg-white/20');
+        }
+    },
+    
+    async flipCamera() {
+        if (!this.state.localStream || this.state.callType === 'voice') return;
+        // Lógica complexa: precisa parar track atual e pedir novo stream com facingMode diferente
+        // e substituir no sender
+        
+        this.state.isFrontCamera = !this.state.isFrontCamera;
+        
+        const constraints = {
+            audio: true,
+            video: { facingMode: this.state.isFrontCamera ? 'user' : 'environment' }
+        };
+        
+        try {
+            // Parar tracks atuais
+            this.state.localStream.getTracks().forEach(t => t.stop());
+            
+            // Obter novo stream
+            const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+            this.state.localStream = newStream;
+            this.elements.localVideo.srcObject = newStream;
+            
+            // Atualizar sender no PeerConnection
+            const videoTrack = newStream.getVideoTracks()[0];
+            const sender = this.state.peerConnection.getSenders().find(s => s.track.kind === 'video');
+            if (sender) {
+                sender.replaceTrack(videoTrack);
+            }
+            
+            // Manter estado de áudio (se estava mutado, mutar novo track)
+             const audioTrack = newStream.getAudioTracks()[0];
+             if (this.state.isAudioMuted) audioTrack.enabled = false;
+            
+        } catch (e) {
+            console.error('Erro ao virar câmera:', e);
+        }
+    },
+    
+    toggleMinimize() {
+        this.elements.callInterface.classList.toggle('hidden');
+        this.elements.minimizedCall.classList.toggle('hidden');
+    },
+    
+    maximizeCall() {
+        this.elements.callInterface.classList.remove('hidden');
+        this.elements.minimizedCall.classList.add('hidden');
+    },
+    
+    startTimer() {
+        this.state.startTime = Date.now();
+        this.state.timerInterval = setInterval(() => {
+            const delta = Date.now() - this.state.startTime;
+            const seconds = Math.floor(delta / 1000);
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = (seconds % 60).toString().padStart(2, '0');
+            
+            this.elements.callDuration.textContent = `${m}:${s}`;
+            document.getElementById('minimized-duration').textContent = `${m}:${s}`;
+        }, 1000);
+    }
+};
+
+// Expor globalmente para uso no onclick do minimized
+window.maximizeCall = () => CallManager.maximizeCall();
+window.endCall = () => CallManager.endCall();
 
 // ========== EVENT LISTENERS ==========
 

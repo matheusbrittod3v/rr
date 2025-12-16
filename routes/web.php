@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\ChatMessageController;
+use App\Http\Controllers\Api\CallSignalingController;
 use App\Http\Controllers\Api\DhruController;
 use App\Http\Controllers\Api\MercadoPagoController;
 use App\Http\Controllers\Api\NotificationController;
@@ -101,6 +102,7 @@ Route::prefix('chat')->group(function () {
         Route::post('/messages', [ChatMessageController::class, 'sendMessage'])->name('chat.api.sendMessage');
         Route::get('/messages', [ChatMessageController::class, 'getMessages'])->name('chat.api.getMessages');
         Route::post('/typing', [ChatMessageController::class, 'sendTypingIndicator'])->name('chat.api.typing');
+        Route::post('/call-signal', [CallSignalingController::class, 'sendSignal'])->name('chat.api.callSignal');
     });
 });
 
