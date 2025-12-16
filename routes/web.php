@@ -84,6 +84,24 @@ Route::post('/process-refund-request', [PaymentController::class, 'processRefund
 // Rota para histórico de pagamentos
 Route::get('/history', [PaymentController::class, 'showHistory'])->name('payment.history');
 
+// Rota de fallback para servir arquivos de chat
+// Útil se o link simbólico não funcionar no servidor
+Route::get('/storage/chat_files/{roomCode}/{filename}', function ($roomCode, $filename) {
+    $path = "chat_files/{$roomCode}/{$filename}";
+    
+    if (!\Storage::disk('public')->exists($path)) {
+        abort(404, 'Arquivo não encontrado');
+    }
+    
+    $filePath = \Storage::disk('public')->path($path);
+    $mimeType = \Storage::disk('public')->mimeType($path);
+    
+    return response()->file($filePath, [
+        'Content-Type' => $mimeType,
+        'Cache-Control' => 'public, max-age=31536000', // Cache por 1 ano
+    ]);
+})->where('filename', '.*')->name('chat.file');
+
 // Rotas para chat
 Route::prefix('chat')->group(function () {
     // Login - sem autenticação necessária
