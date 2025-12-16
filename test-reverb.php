@@ -1,150 +1,122 @@
+#!/usr/bin/env php
 <?php
 
 /**
- * TESTE DE CONEXÃO COM LARAVEL REVERB (PHP PURO)
- * 
- * Configuração hardcoded para produção (VPS)
+ * Script para testar conexão e envio de eventos para o Reverb
  * 
  * Uso:
- *   php test-reverb.php                    # Testa produção (padrão)
- *   php test-reverb.php localhost           # Testa localhost
+ *   php test-reverb.php [host] [port] [scheme] [app_key] [app_id] [app_secret]
+ * 
+ * Exemplos:
+ *   php test-reverb.php
+ *   php test-reverb.php localhost 8080 http your-app-key your-app-id your-app-secret
  */
 
-// ============================================
-// CONFIGURAÇÕES HARDCODED - PRODUÇÃO (VPS)
-// ============================================
-$REVERB_APP_ID     = '345678';
-$REVERB_APP_KEY    = 'sdfghjkhgfdfghjkhgfghjk';
-$REVERB_APP_SECRET = 'dfghjkrtyuijhgfghjklkjhgfghjkjhgh';
-$REVERB_HOST       = 'renttool.store';  // ou 'uniontechnicals.com'
-$REVERB_PORT       = '443';
-$REVERB_SCHEME     = 'https';
+require __DIR__.'/vendor/autoload.php';
 
-// Detectar se é localhost via argumento
-$mode = $argv[1] ?? 'production';
+use GuzzleHttp\Client;
+use Ratchet\Client\WebSocket;
+use Ratchet\Client\Connector as RatchetConnector;
+use React\EventLoop\Loop;
+use React\Socket\Connector as ReactConnector;
 
-if ($mode === 'localhost') {
-    // Configuração de localhost (para testes locais)
-    $REVERB_HOST   = 'localhost';
-    $REVERB_SCHEME = 'http';
-    $REVERB_PORT   = '8080';
+$host = $argv[1] ?? $_ENV['REVERB_HOST'] ?? '127.0.0.1';
+$port = $argv[2] ?? $_ENV['REVERB_PORT'] ?? '8080';
+$scheme = $argv[3] ?? $_ENV['REVERB_SCHEME'] ?? 'http';
+$appKey = $argv[4] ?? $_ENV['REVERB_APP_KEY'] ?? 'reverb';
+$appId = $argv[5] ?? $_ENV['REVERB_APP_ID'] ?? 'reverb';
+$appSecret = $argv[6] ?? $_ENV['REVERB_APP_SECRET'] ?? 'reverb';
+
+echo "> Testing Reverb connection...\n";
+echo "> Host: $host:$port\n";
+echo "> Scheme: $scheme\n";
+echo "> App Key: $appKey\n";
+echo "> App ID: $appId\n";
+
+// Test HTTP connection
+try {
+    $httpClient = new Client;
+    $response = $httpClient->get("$scheme://$host:$port/apps/$appId", [
+        'headers' => [
+            'Authorization' => 'Bearer '.$appKey,
+        ],
+    ]);
+
+    echo "> ✅ HTTP connection successful\n";
+    echo "> Response: ".$response->getBody()->getContents()."\n\n";
+} catch (Exception $e) {
+    echo "> ❌ HTTP connection failed: ".$e->getMessage()."\n\n";
 }
 
-// Construir endpoint
-// Em produção HTTPS (porta 443), não especificamos porta na URL
-if ($REVERB_SCHEME === 'https' && $REVERB_PORT === '443') {
-    $endpoint = "{$REVERB_SCHEME}://{$REVERB_HOST}/apps/{$REVERB_APP_ID}/events";
-} else {
-    $endpoint = "{$REVERB_SCHEME}://{$REVERB_HOST}:{$REVERB_PORT}/apps/{$REVERB_APP_ID}/events";
-}
+// Test WebSocket connection
+echo "> Testing WebSocket connection...\n";
 
-// Payload do evento
-$payload = json_encode([
-    'name' => 'reverb.test',
-    'channels' => ['private-test'],
-    'data' => json_encode([
-        'message' => 'Conexão com Reverb OK',
-        'timestamp' => date('Y-m-d H:i:s'),
-    ]),
-]);
+$loop = Loop::get();
 
-$timestamp = time();
-$bodyMd5 = md5($payload);
+$connector = new RatchetConnector($loop, new ReactConnector($loop));
 
-// String de assinatura (padrão Reverb / Pusher)
-$stringToSign = "POST\n/apps/{$REVERB_APP_ID}/events\n"
-    . "auth_key={$REVERB_APP_KEY}"
-    . "&auth_timestamp={$timestamp}"
-    . "&auth_version=1.0"
-    . "&body_md5={$bodyMd5}";
-
-$signature = hash_hmac('sha256', $stringToSign, $REVERB_APP_SECRET);
-
-// Query autenticada
-$query = http_build_query([
-    'auth_key' => $REVERB_APP_KEY,
-    'auth_timestamp' => $timestamp,
-    'auth_version' => '1.0',
-    'body_md5' => $bodyMd5,
-    'auth_signature' => $signature,
-]);
-
-$url = "{$endpoint}?{$query}";
-
-// CURL
-$ch = curl_init($url);
-
-curl_setopt_array($ch, [
-    CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => $payload,
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-    ],
-    CURLOPT_TIMEOUT => 10,
-    CURLOPT_SSL_VERIFYPEER => $REVERB_SCHEME === 'https', // Verificar SSL em produção
-    CURLOPT_SSL_VERIFYHOST => $REVERB_SCHEME === 'https' ? 2 : false,
-    CURLOPT_FOLLOWLOCATION => true,
-    CURLOPT_MAXREDIRS => 3,
-]);
-
-$response = curl_exec($ch);
-$error = curl_error($ch);
-$status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-curl_close($ch);
-
-// OUTPUT
-echo "==============================\n";
-echo " TESTE DE CONEXÃO - REVERB\n";
-echo "==============================\n";
-echo "Ambiente: " . ($mode === 'localhost' ? 'LOCALHOST' : 'PRODUÇÃO (VPS)') . "\n";
-echo "Host: {$REVERB_HOST}\n";
-echo "Scheme: {$REVERB_SCHEME}\n";
-echo "Porta: {$REVERB_PORT}\n";
-echo "URL: {$url}\n";
-echo "HTTP STATUS: {$status}\n\n";
-
-if ($error) {
-    echo "❌ ERRO CURL:\n{$error}\n\n";
-    echo "💡 DICAS:\n";
-    echo "   - Verifique se o Reverb está rodando\n";
-    echo "   - Verifique se a porta está correta\n";
-    echo "   - Verifique se o host está acessível\n";
-    if ($REVERB_SCHEME === 'https') {
-        echo "   - Verifique se o certificado SSL é válido\n";
-    }
-    exit(1);
-}
-
-if ($status >= 200 && $status < 300) {
-    echo "✅ REVERB RESPONDEU COM SUCESSO\n";
-    echo "✅ Conexão estabelecida corretamente!\n";
-} else {
-    echo "⚠️ RESPOSTA INESPERADA\n";
-    echo "Status HTTP: {$status}\n";
+$connector("$scheme://$host:$port/app/$appKey", [
+    'Origin' => "$scheme://$host:$port",
+])->then(function (WebSocket $conn) use ($loop) {
+    echo "> ✅ WebSocket connection established\n";
     
-    if ($status === 0) {
-        echo "\n💡 Possíveis causas:\n";
-        echo "   - Servidor não está acessível\n";
-        echo "   - Porta incorreta ou bloqueada\n";
-        echo "   - Firewall bloqueando conexão\n";
-    } elseif ($status === 404) {
-        echo "\n💡 Possíveis causas:\n";
-        echo "   - Endpoint incorreto\n";
-        echo "   - REVERB_APP_ID incorreto\n";
-    } elseif ($status === 401 || $status === 403) {
-        echo "\n💡 Possíveis causas:\n";
-        echo "   - Credenciais incorretas (APP_KEY, APP_SECRET)\n";
-        echo "   - Assinatura inválida\n";
-    }
-}
+    $conn->on('message', function ($message) {
+        echo "> Received message: $message\n";
+        
+        $data = json_decode($message, true);
+        
+        if (isset($data['event']) && $data['event'] === 'pusher:connection_established') {
+            echo "> ✅ Pusher connection established\n";
+            
+            // Subscribe to a test channel
+            $conn->send(json_encode([
+                'event' => 'pusher:subscribe',
+                'data' => [
+                    'channel' => 'chat-room.test', // Changed from 'private-test' to 'chat-room.test'
+                ],
+            ]));
+        }
+        
+        if (isset($data['event']) && $data['event'] === 'pusher_internal:subscription_succeeded') {
+            echo "> ✅ Successfully subscribed to channel\n";
+            
+            // Send a test event
+            $conn->send(json_encode([
+                'event' => 'client-test-event',
+                'channel' => 'chat-room.test', // Changed from 'private-test' to 'chat-room.test'
+                'data' => json_encode([
+                    'message' => 'Hello from WebSocket test!',
+                ]),
+            ]));
+        }
+    });
+    
+    $conn->on('close', function ($code = null, $reason = null) {
+        echo "> WebSocket connection closed: $code $reason\n";
+    });
+    
+    $conn->on('error', function ($e) {
+        echo "> WebSocket error: ".$e->getMessage()."\n";
+    });
+    
+    // Send connection message
+    $conn->send(json_encode([
+        'event' => 'pusher:subscribe',
+        'data' => [
+            'auth' => '',
+            'channel' => 'chat-room.test', // Changed from 'private-test' to 'chat-room.test'
+        ],
+    ]));
+    
+}, function (Exception $e) use ($loop) {
+    echo "> ❌ WebSocket connection failed: ".$e->getMessage()."\n";
+    $loop->stop();
+});
 
-echo "\nResposta do servidor:\n";
-if (empty($response)) {
-    echo "(vazio)\n";
-} else {
-    echo $response . "\n";
-}
+// Stop the loop after 10 seconds
+$loop->addTimer(10, function () use ($loop) {
+    echo "> Test completed\n";
+    $loop->stop();
+});
 
-echo "\n";
+$loop->run();

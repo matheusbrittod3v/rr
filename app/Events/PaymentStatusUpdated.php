@@ -4,8 +4,6 @@ namespace App\Events;
 
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PresenceChannel;
-use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -35,6 +33,7 @@ class PaymentStatusUpdated implements ShouldBroadcast
 
     /**
      * Get the channels the event should broadcast on.
+     * NOTA: Usando apenas canais PÚBLICOS
      *
      * @return array<int, \Illuminate\Broadcasting\Channel>
      */
@@ -43,9 +42,10 @@ class PaymentStatusUpdated implements ShouldBroadcast
         // Handle case where payment might not have an ID (e.g., for testing)
         $paymentId = $this->payment->id ?? 0;
         
+        // Usando apenas canais públicos (Channel em vez de PrivateChannel)
         return [
             new Channel('payments'),
-            new PrivateChannel('payments.' . $paymentId),
+            new Channel('payments.' . $paymentId),
         ];
     }
 

@@ -31,6 +31,31 @@
                         </div>
                     </div>
                     <div class="flex items-center space-x-2">
+                        {{-- Botão Chamada de Voz --}}
+                        <button 
+                            id="voice-call-btn"
+                            class="p-2 bg-white/10 text-white hover:bg-green-500 rounded-lg transition-all backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white hover:scale-110"
+                            title="Chamada de voz"
+                        >
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                            </svg>
+                        </button>
+                        
+                        {{-- Botão Chamada de Vídeo --}}
+                        <button 
+                            id="video-call-btn"
+                            class="p-2 bg-white/10 text-white hover:bg-blue-500 rounded-lg transition-all backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white hover:scale-110"
+                            title="Chamada de vídeo"
+                        >
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                        </button>
+                        
+                        {{-- Separador --}}
+                        <div class="w-px h-6 bg-white/20 mx-1"></div>
+                        
                         <span class="hidden sm:inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white/20 text-white backdrop-blur-sm font-mono">
                             {{ $chatRoom->room_code }}
                         </span>
@@ -666,13 +691,18 @@ const SoundManager = {
 };
 
 const CallManager = {
-    // Configuração
+    // Configuração Enterprise
     config: {
         iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' }
-        ]
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' }
+        ],
+        callTimeout: 45000, // 45 segundos para atender
+        reconnectDelay: 2000,
+        maxReconnectAttempts: 3
     },
     
     // Estado
@@ -689,7 +719,12 @@ const CallManager = {
         timerInterval: null,
         statsInterval: null,
         isInitiator: false,
-        isFrontCamera: true
+        isFrontCamera: true,
+        // Novos campos enterprise
+        callTimeoutId: null,
+        iceCandidateQueue: [],
+        reconnectAttempts: 0,
+        connectionState: 'idle' // idle, calling, ringing, connecting, connected, reconnecting
     },
     
     // Elementos UI
@@ -791,32 +826,94 @@ const CallManager = {
             case 'ice-candidate':
                 this.handleIceCandidate(data.signal_data);
                 break;
+            case 'call-busy':
+                this.handleCallBusy();
+                break;
+            case 'call-accept':
+                // Outro lado aceitou, limpar timeout
+                this.clearCallTimeout();
+                break;
         }
     },
     
-    // Processar ICE candidate recebido
+    // Processar ICE candidate recebido (com queue)
     async handleIceCandidate(candidate) {
-        if (!this.state.peerConnection || !candidate) return;
+        if (!candidate) return;
+        
+        // Se peer não existe ou não tem remote description, guardar na queue
+        if (!this.state.peerConnection || !this.state.peerConnection.remoteDescription) {
+            this.state.iceCandidateQueue.push(candidate);
+            console.log('[CallManager] ICE candidate enfileirado, aguardando peer');
+            return;
+        }
+        
         try {
             await this.state.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-            console.log('[CallManager] ICE candidate adicionado');
         } catch (error) {
             console.error('[CallManager] Erro ao adicionar ICE candidate:', error);
         }
     },
     
-    // Iniciar Chamada (Outgoing) - Método PRINCIPAL
-    // Nota: Os métodos duplicados foram removidos, mantendo apenas esta versão corrigida
+    // Processar queue de ICE candidates
+    async processIceCandidateQueue() {
+        while (this.state.iceCandidateQueue.length > 0) {
+            const candidate = this.state.iceCandidateQueue.shift();
+            try {
+                await this.state.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (e) {
+                console.error('[CallManager] Erro ao processar ICE da queue:', e);
+            }
+        }
+    },
+    
+    // Handler para quando outro usuário está ocupado
+    handleCallBusy() {
+        SoundManager.stop();
+        this.clearCallTimeout();
+        this.showToast('Usuário ocupado em outra chamada');
+        this.resetCall();
+    },
+    
+    // Timeout management
+    startCallTimeout() {
+        this.clearCallTimeout();
+        this.state.callTimeoutId = setTimeout(() => {
+            console.log('[CallManager] Timeout - chamada não atendida');
+            this.showToast('Chamada não atendida');
+            this.cancelCall();
+        }, this.config.callTimeout);
+    },
+    
+    clearCallTimeout() {
+        if (this.state.callTimeoutId) {
+            clearTimeout(this.state.callTimeoutId);
+            this.state.callTimeoutId = null;
+        }
+    },
+    
+    // Toast helper
+    showToast(msg, duration = 3000) {
+        const toast = document.createElement('div');
+        toast.className = 'fixed top-4 right-4 bg-gray-800 text-white px-6 py-3 rounded-xl shadow-2xl z-[60] animate-fade-in';
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), duration);
+    },
     
     // Cancelar (Quem ligou desiste)
     cancelCall() {
+        this.clearCallTimeout();
         this.sendSignal('call-cancel');
         this.resetCall();
     },
     
     // Receber Chamada (Incoming)
     handleIncomingCall(data) {
-        if (this.state.isCallActive) return; // Busy
+        // Se já está em chamada, enviar sinal de ocupado
+        if (this.state.isCallActive) {
+            this.sendSignal('call-busy');
+            return;
+        }
         
         this.state.callType = data.type;
         this.elements.callTypeLabel.textContent = data.type === 'video' ? 'Chamada de Vídeo' : 'Chamada de Voz';
@@ -865,16 +962,42 @@ const CallManager = {
     },
     
     async startCall(type) {
+        // Verificar se dispositivos estão disponíveis
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const hasAudio = devices.some(d => d.kind === 'audioinput');
+            const hasVideo = devices.some(d => d.kind === 'videoinput');
+            
+            if (!hasAudio) {
+                this.showToast('Nenhum microfone encontrado');
+                return;
+            }
+            if (type === 'video' && !hasVideo) {
+                this.showToast('Nenhuma câmera encontrada');
+                return;
+            }
+        } catch (e) {
+            console.warn('[CallManager] Erro ao verificar dispositivos:', e);
+        }
+        
         this.state.callType = type;
         this.state.isInitiator = true;
+        this.state.connectionState = 'calling';
         
         this.elements.outgoingModal.classList.remove('hidden');
         SoundManager.startCalling();
         
+        // Iniciar timeout
+        this.startCallTimeout();
+        
         try {
             const constraints = {
-                audio: true,
-                video: type === 'video' ? { facingMode: 'user' } : false
+                audio: { echoCancellation: true, noiseSuppression: true },
+                video: type === 'video' ? { 
+                    facingMode: 'user',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                } : false
             };
             this.state.localStream = await navigator.mediaDevices.getUserMedia(constraints);
             this.elements.localVideo.srcObject = this.state.localStream;
@@ -893,8 +1016,17 @@ const CallManager = {
             
         } catch (error) {
             console.error('[CallManager] Erro ao iniciar chamada:', error);
-            alert('Erro ao acessar dispositivos.');
-            this.cancelCall();
+            this.clearCallTimeout();
+            
+            // Mensagens de erro específicas
+            if (error.name === 'NotAllowedError') {
+                this.showToast('Permissão de mídia negada. Verifique as configurações do navegador.');
+            } else if (error.name === 'NotFoundError') {
+                this.showToast('Dispositivo de mídia não encontrado.');
+            } else {
+                this.showToast('Erro ao acessar dispositivos.');
+            }
+            this.resetCall();
         }
     },
     
@@ -902,13 +1034,21 @@ const CallManager = {
         SoundManager.stop();
         if (navigator.vibrate) navigator.vibrate(0);
         
+        // Notificar quem ligou que aceitamos
+        this.sendSignal('call-accept');
+        
         this.elements.incomingModal.classList.add('hidden');
+        this.state.connectionState = 'connecting';
         this.showCallInterface(); 
         
         try {
             const constraints = {
-                audio: true,
-                video: this.state.callType === 'video' ? { facingMode: 'user' } : false
+                audio: { echoCancellation: true, noiseSuppression: true },
+                video: this.state.callType === 'video' ? { 
+                    facingMode: 'user',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                } : false
             };
             
             this.state.localStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -927,24 +1067,35 @@ const CallManager = {
             if (this.pendingOffer) {
                 await this.processOffer(this.pendingOffer);
                 this.pendingOffer = null;
+                // Processar ICE candidates que chegaram antes
+                await this.processIceCandidateQueue();
             }
             
         } catch (error) {
             console.error('[CallManager] Erro ao aceitar:', error);
+            this.showToast('Erro ao acessar dispositivos');
             this.endCall(false);
         }
     },
     
     async handleAnswer(answer) {
-        // Se receber resposta, esconde modal de chamando e mostra interface
+        // Limpar timeout - chamada foi atendida
+        this.clearCallTimeout();
+        
+        // Esconder modal e mostrar interface
         this.elements.outgoingModal.classList.add('hidden');
         SoundManager.stop();
+        this.state.connectionState = 'connected';
         this.showCallInterface();
         
         if (!this.state.peerConnection) return;
         try {
             await this.state.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-        } catch (e) { console.error(e); }
+            // Processar ICE candidates que chegaram antes
+            await this.processIceCandidateQueue();
+        } catch (e) { 
+            console.error('[CallManager] Erro ao processar answer:', e); 
+        }
     },
     
     // Rejeitar
@@ -970,19 +1121,14 @@ const CallManager = {
         if (type === 'call-reject') msg = 'Chamada recusada';
         if (type === 'call-cancel') msg = 'Chamada cancelada';
         
-        // Toast simples
-        const toast = document.createElement('div');
-        toast.className = 'fixed top-4 right-4 bg-gray-800 text-white px-6 py-3 rounded-xl shadow-2xl z-50 animate-fade-in';
-        toast.textContent = msg;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
-        
+        this.showToast(msg);
         this.resetCall();
     },
     
     resetCall() {
-         SoundManager.stop();
-         
+        SoundManager.stop();
+        this.clearCallTimeout();
+        
         // Parar tracks
         if (this.state.localStream) {
             this.state.localStream.getTracks().forEach(track => track.stop());
@@ -993,24 +1139,32 @@ const CallManager = {
         }
         
         // Limpar vídeos
-        this.elements.localVideo.srcObject = null;
-        this.elements.remoteVideo.srcObject = null;
+        if (this.elements.localVideo) this.elements.localVideo.srcObject = null;
+        if (this.elements.remoteVideo) this.elements.remoteVideo.srcObject = null;
         
         // Esconder UI
-        this.elements.callInterface.classList.add('hidden');
-        this.elements.minimizedCall.classList.add('hidden');
-        this.elements.incomingModal.classList.add('hidden');
-        this.elements.outgoingModal.classList.add('hidden');
+        this.elements.callInterface?.classList.add('hidden');
+        this.elements.minimizedCall?.classList.add('hidden');
+        this.elements.incomingModal?.classList.add('hidden');
+        this.elements.outgoingModal?.classList.add('hidden');
         
         // Resetar Variaveis
         this.state.localStream = null;
+        this.state.remoteStream = null;
         this.state.peerConnection = null;
         this.state.isCallActive = false;
         this.state.isScreenSharing = false;
+        this.state.isAudioMuted = false;
+        this.state.isVideoOff = false;
+        this.state.connectionState = 'idle';
+        this.state.iceCandidateQueue = [];
+        this.state.reconnectAttempts = 0;
         this.pendingOffer = null;
         
         if (this.state.timerInterval) clearInterval(this.state.timerInterval);
         if (this.state.statsInterval) clearInterval(this.state.statsInterval);
+        this.state.timerInterval = null;
+        this.state.statsInterval = null;
     },
     
     // Compartilhar Tela
@@ -1052,14 +1206,17 @@ const CallManager = {
     },
     
     replaceVideoTrack(newTrack) {
-        if (!this.state.peerConnection) return;
+        if (!this.state.peerConnection || !this.state.localStream) return;
         
-        const sender = this.state.peerConnection.getSenders().find(s => s.track.kind === 'video');
+        const sender = this.state.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
         if (sender) {
             sender.replaceTrack(newTrack);
-            this.state.localStream.removeTrack(this.state.localStream.getVideoTracks()[0]);
+            const oldTrack = this.state.localStream.getVideoTracks()[0];
+            if (oldTrack) this.state.localStream.removeTrack(oldTrack);
             this.state.localStream.addTrack(newTrack);
-            this.elements.localVideo.srcObject = this.state.localStream;
+            if (this.elements.localVideo) {
+                this.elements.localVideo.srcObject = this.state.localStream;
+            }
         }
     },
     
@@ -1075,28 +1232,92 @@ const CallManager = {
          }
     },
 
-    // Peer Connection & Utils (Mantido similar, com adição de Stats)
+    // Peer Connection Enterprise
     createPeerConnection() {
         this.state.peerConnection = new RTCPeerConnection(this.config);
         this.state.isCallActive = true;
         this.startTimer();
-        this.startStats(); // Monitorar qualidade
+        this.startStats();
         
+        // ICE candidate
         this.state.peerConnection.onicecandidate = (event) => {
-            if (event.candidate) this.sendSignal('ice-candidate', event.candidate);
+            if (event.candidate) {
+                this.sendSignal('ice-candidate', event.candidate);
+            }
         };
         
+        // ICE gathering state
+        this.state.peerConnection.onicegatheringstatechange = () => {
+            const state = this.state.peerConnection.iceGatheringState;
+            console.log('[CallManager] ICE Gathering State:', state);
+        };
+        
+        // Remote track
         this.state.peerConnection.ontrack = (event) => {
+            console.log('[CallManager] Track remoto recebido');
             this.state.remoteStream = event.streams[0];
-            this.elements.remoteVideo.srcObject = this.state.remoteStream;
-            this.elements.minimizedVideo.srcObject = this.state.remoteStream;
+            if (this.elements.remoteVideo) {
+                this.elements.remoteVideo.srcObject = this.state.remoteStream;
+            }
+            if (this.elements.minimizedVideo) {
+                this.elements.minimizedVideo.srcObject = this.state.remoteStream;
+            }
         };
         
+        // ICE connection state (mais confiável para detectar problemas)
+        this.state.peerConnection.oniceconnectionstatechange = () => {
+            const state = this.state.peerConnection.iceConnectionState;
+            console.log('[CallManager] ICE Connection State:', state);
+            
+            if (state === 'connected' || state === 'completed') {
+                this.state.connectionState = 'connected';
+                this.state.reconnectAttempts = 0;
+            } else if (state === 'disconnected') {
+                this.state.connectionState = 'reconnecting';
+                this.showToast('Reconectando...');
+                // Tentar reconexão
+                this.attemptReconnect();
+            } else if (state === 'failed') {
+                if (this.state.reconnectAttempts < this.config.maxReconnectAttempts) {
+                    this.attemptReconnect();
+                } else {
+                    this.showToast('Conexão perdida');
+                    this.endCall(true);
+                }
+            }
+        };
+        
+        // Connection state (backup)
         this.state.peerConnection.onconnectionstatechange = () => {
             const state = this.state.peerConnection.connectionState;
-            console.log('[Connection State]', state);
-            if (state === 'disconnected' || state === 'failed') this.endCall(false);
+            console.log('[CallManager] Connection State:', state);
+            
+            if (state === 'connected') {
+                this.state.connectionState = 'connected';
+            }
         };
+    },
+    
+    // Tentativa de reconexão
+    async attemptReconnect() {
+        if (this.state.reconnectAttempts >= this.config.maxReconnectAttempts) {
+            console.log('[CallManager] Máximo de tentativas de reconexão atingido');
+            return;
+        }
+        
+        this.state.reconnectAttempts++;
+        console.log(`[CallManager] Tentativa de reconexão ${this.state.reconnectAttempts}/${this.config.maxReconnectAttempts}`);
+        
+        // ICE restart
+        if (this.state.isInitiator && this.state.peerConnection) {
+            try {
+                const offer = await this.state.peerConnection.createOffer({ iceRestart: true });
+                await this.state.peerConnection.setLocalDescription(offer);
+                this.sendSignal('offer', offer);
+            } catch (e) {
+                console.error('[CallManager] Erro ao tentar reconexão:', e);
+            }
+        }
     },
     
     // Monitorar Qualidade

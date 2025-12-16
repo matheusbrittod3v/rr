@@ -35,7 +35,7 @@ class CallSignalingController extends Controller
 
             // Validar dados
             $validator = Validator::make($request->all(), [
-                'signal_type' => 'required|string|in:offer,answer,ice-candidate,call-start,call-end,call-reject',
+                'signal_type' => 'required|string|in:offer,answer,ice-candidate,call-start,call-end,call-reject,call-cancel,call-accept,call-busy',
                 'signal_data' => 'nullable|array',
             ]);
 
