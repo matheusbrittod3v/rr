@@ -19,6 +19,17 @@ Route::get('/sitemap.xml', [SitemapController::class, 'index']);
 // Rotas de broadcasting para autorização de canais privados
 Broadcast::routes(['middleware' => ['web']]);
 
+// Rota de debug para verificar sessão (remover em produção)
+Route::get('/debug-session', function () {
+    return response()->json([
+        'session_id' => session()->getId(),
+        'session_data' => session()->all(),
+        'authenticated_chat_room' => session('authenticated_chat_room'),
+        'chat_user_role' => session('chat_user_role'),
+        'has_session' => request()->hasSession(),
+    ]);
+})->middleware('web');
+
 // Registration Link Routes
 Route::get('/register/{token}', [RegistrationLinkController::class, 'showRegistrationForm'])->name('register.show');
 Route::post('/register/{token}', [RegistrationLinkController::class, 'register'])->name('register.submit');

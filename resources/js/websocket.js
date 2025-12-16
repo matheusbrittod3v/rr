@@ -61,6 +61,7 @@ if (reverbKey && reverbHost) {
             disableStats: true, // Desabilita estatísticas do Pusher (não necessário para Reverb)
             cluster: 'mt1', // Cluster padrão (ignorado quando wsHost é customizado, mas necessário para Pusher.js)
             authEndpoint: '/broadcasting/auth', // Endpoint para autorização de canais privados
+            withCredentials: true, // 🔥 ESSENCIAL: Envia cookies de sessão para requisições cross-origin/porta
             auth: {
                 headers: {
                     'X-CSRF-TOKEN': csrfToken,
@@ -88,7 +89,7 @@ if (reverbKey && reverbHost) {
                                 'X-Requested-With': 'XMLHttpRequest',
                                 'Accept': 'application/json',
                             },
-                            credentials: 'same-origin', // IMPORTANTE: Envia cookies de sessão
+                            credentials: 'include', // 🔥 ESSENCIAL: Envia cookies mesmo em requisições cross-origin/porta
                             body: JSON.stringify({
                                 socket_id: socketId,
                                 channel_name: channel.name

@@ -175,8 +175,8 @@ class MercadoPagoController extends Controller
         SendClientPaymentNotificationJob::dispatch($paymentModel->id, $chatRoom->id);
         SendProviderPaymentNotificationJob::dispatch($paymentModel->id, $chatRoom->id);
         
-        // Set session for auto-authentication
-        $this->setChatRoomSession($chatRoom);
+        // Set session for auto-authentication usando o ChatService
+        $chatService->setChatRoomSession($chatRoom, 'client', true);
 
         // Generate redirect URL
         $redirectUrl = route('chat.room', $chatRoom->room_code);
@@ -196,37 +196,6 @@ class MercadoPagoController extends Controller
         ]);
     }
 
-    /**
-     * Set chat room session for auto-authentication
-     *
-     * @param ChatRoom $chatRoom
-     * @return void
-     */
-    private function setChatRoomSession($chatRoom)
-    {
-        try {
-            // Automatically inject session for client to bypass password entry
-            session([
-                'authenticated_chat_room' => $chatRoom->room_code,
-                'authenticated_from_payment' => true
-            ]);
-            
-            // Save the session immediately to ensure it's available
-            session()->save();
-            
-            // Log for debugging
-            Log::info('Chat room session set', [
-                'room_code' => $chatRoom->room_code,
-                'authenticated_chat_room' => session('authenticated_chat_room'),
-                'authenticated_from_payment' => session('authenticated_from_payment')
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Error setting chat room session', [
-                'chat_room_id' => $chatRoom->id,
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
 
     /**
      * Create success response

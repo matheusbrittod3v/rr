@@ -199,7 +199,7 @@ return [
     |
     */
 
-    'same_site' => env('SESSION_SAME_SITE', 'lax'),
+    'same_site' => env('SESSION_SAME_SITE', null), // null = 'lax' por padrão, mas permite override para 'none' quando necessário
 
     /*
     |--------------------------------------------------------------------------

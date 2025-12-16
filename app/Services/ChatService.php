@@ -80,5 +80,52 @@ class ChatService
     {
         return session('authenticated_chat_room') === $roomCode;
     }
+
+    /**
+     * Set chat room session for authentication
+     * Usado tanto no login direto quanto no fluxo de pagamento
+     *
+     * @param ChatRoom $chatRoom
+     * @param string $userRole 'client' ou 'provider'
+     * @param bool $fromPayment Se true, adiciona flag de autenticação via pagamento
+     * @return void
+     */
+    public function setChatRoomSession(ChatRoom $chatRoom, string $userRole, bool $fromPayment = false): void
+    {
+        try {
+            // Payload de sessão padrão
+            $sessionData = [
+                'authenticated_chat_room' => $chatRoom->room_code,
+                'chat_user_role' => $userRole,
+            ];
+            
+            // Se for do fluxo de pagamento, adiciona flag específica
+            if ($fromPayment) {
+                $sessionData['authenticated_from_payment'] = true;
+            }
+            
+            // Salvar na sessão
+            session($sessionData);
+            
+            // Save the session immediately to ensure it's available
+            session()->save();
+            
+            // Log for debugging
+            Log::info('Chat room session set', [
+                'room_code' => $chatRoom->room_code,
+                'user_role' => $userRole,
+                'from_payment' => $fromPayment,
+                'authenticated_chat_room' => session('authenticated_chat_room'),
+                'chat_user_role' => session('chat_user_role'),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error setting chat room session', [
+                'chat_room_id' => $chatRoom->id,
+                'user_role' => $userRole,
+                'from_payment' => $fromPayment,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
 }
 
