@@ -12,12 +12,25 @@ use Illuminate\Support\Facades\Broadcast;
 
 Broadcast::routes([
     'middleware' => [
-        'web',
+        
+        'chat.session',  // Use chat session middleware for proper chat authentication
     ],
     'prefix' => 'api',
 ]);
 
-// Canal público (não exige auth)
+// Canal privado (exige auth via chat session)
 Broadcast::channel('chat-room.{roomCode}', function ($user = null, $roomCode) {
-    return true;
+    // This will only be called if the user is properly authenticated via chat.session middleware
+    // The user role is stored in the session
+    $authenticatedRoom = session('authenticated_chat_room');
+    $userRole = session('chat_user_role');
+    
+    if ($authenticatedRoom === $roomCode && !empty($userRole)) {
+        return [
+            'id' => session()->getId(),
+            'role' => $userRole,
+        ];
+    }
+    
+    return false;
 });
