@@ -682,7 +682,7 @@
                     <div class="marca-card bg-white rounded-2xl shadow-sm p-6 border border-slate-100 transition-all duration-300 feature-card cursor-pointer hover:shadow-lg hover:border-primary" data-marca-id="{{ $marca->id }}">
                         <div class="text-center">
                             @if($marca->caminho_imagem)
-                                <img src="{{ asset($marca->caminho_imagem) }}" alt="{{ $marca->nome }}" class="w-24 h-24 object-contain mx-auto mb-4 rounded-xl">
+                                <img src="{{ asset('storage/' . $marca->caminho_imagem) }}" alt="{{ $marca->nome }}" class="w-24 h-24 object-contain mx-auto mb-4 rounded-xl">
                             @else
                                 <div class="w-24 h-24 bg-slate-100 rounded-xl mx-auto mb-4 flex items-center justify-center">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -983,35 +983,60 @@
     </div>
     
     <!-- Loading Modal -->
-    <div id="loadingModal" class="modal">
-        <div class="modal-content" style="max-width: 600px;">
-            <div class="p-12">
+    <div id="loadingModal" class="modal" data-backdrop="static">
+        <div class="modal-content relative overflow-hidden" style="max-width: 550px; border-radius: 24px;">
+            <!-- Decorative background elements -->
+            <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary via-blue-400 to-primary animate-pulse"></div>
+            
+            <div class="p-8 md:p-10 w-full">
                 <!-- Loading State -->
-                <div id="loadingState" class="text-center">
-                    <div class="spinner mb-6"></div>
-                    <h3 class="text-2xl font-bold mt-4 text-slate-900 dark:text-white" id="loadingModalTitle">Estamos gerando seu orçamento</h3>
-                    <p class="text-slate-600 dark:text-slate-300 mt-3 text-lg" id="loadingModalMessage">Aguarde nessa tela. Não recarregue ou mude de página.</p>
+                <div id="loadingState" class="text-center flex flex-col items-center">
+                    <div class="relative mb-8">
+                        <div class="w-20 h-20 border-4 border-blue-100 rounded-full dark:border-slate-700"></div>
+                        <div class="w-20 h-20 border-4 border-primary border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+                        <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                    </div>
+                    
+                    <h3 class="text-2xl font-bold mb-3 text-slate-900 dark:text-white" id="loadingModalTitle">Gerando seu Orçamento</h3>
+                    <p class="text-slate-600 dark:text-slate-300 mb-8 text-lg leading-relaxed max-w-sm" id="loadingModalMessage">
+                        Aguarde um momento. Estamos processando sua solicitação e contactando os profissionais...
+                    </p>
+                    
+                    <button id="cancelLoadingBtn" onclick="onCancelBudgetClick()" class="py-3 px-6 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all font-medium text-sm flex items-center justify-center space-x-2 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        <span>Cancelar solicitação</span>
+                    </button>
                 </div>
                 
                 <!-- Response State -->
-                <div id="budgetResponseContainer" class="hidden">
+                <div id="budgetResponseContainer" class="hidden animate-fade-in-up">
                     <!-- Accepted Response -->
                     <div id="acceptedResponse" class="hidden text-center">
-                        <div class="mb-6">
-                            <h2 class="text-2xl font-bold text-slate-900 mb-2">Orçamento Aceito</h2>
-                            <p class="text-slate-600 dark:text-slate-300 text-base mb-4">O profissional aceitou sua solicitação. Confira o valor abaixo e gere o pagamento via PIX quando estiver pronto.</p>
+                        <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 dark:bg-green-900/30">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            </svg>
                         </div>
+                        
+                        <h2 class="text-2xl font-bold text-slate-900 mb-2 dark:text-white">Orçamento Pronto!</h2>
+                        <p class="text-slate-600 dark:text-slate-300 text-base mb-8">Um profissional aceitou sua solicitação.</p>
 
-                        <div class="p-6 rounded-lg mb-8 bg-white border border-slate-100 dark:bg-slate-800 dark:border-slate-700">
-                            <p class="text-slate-700 dark:text-slate-300 mb-2">Valor do Serviço</p>
-                            <p class="text-2xl font-semibold text-slate-900 dark:text-white" id="budgetValue"></p>
+                        <div class="p-6 rounded-2xl mb-8 bg-slate-50 border border-slate-100 dark:bg-slate-800/50 dark:border-slate-700">
+                            <p class="text-slate-500 uppercase text-xs font-semibold tracking-wider mb-2 dark:text-slate-400">Valor Total</p>
+                            <p class="text-4xl font-bold text-slate-900 dark:text-white tracking-tight" id="budgetValue">R$ 0,00</p>
                         </div>
 
                         <div class="flex flex-col space-y-3">
-                            <button id="generatePaymentBtn" onclick="onGeneratePaymentClick()" class="w-full bg-primary text-white font-medium py-3 px-6 rounded-lg hover:bg-blue-700 transition">
-                                Gerar Pagamento
+                            <button id="generatePaymentBtn" onclick="onGeneratePaymentClick()" class="w-full bg-primary text-white font-bold py-4 px-6 rounded-xl hover:bg-blue-600 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+                                Pagar com PIX
                             </button>
-                            <button id="cancelBudgetBtn" onclick="onCancelBudgetClick()" class="w-full bg-slate-100 text-slate-800 font-medium py-3 px-6 rounded-lg hover:bg-slate-200 transition">
+                            <button id="cancelBudgetBtn" onclick="onCancelBudgetClick()" class="w-full bg-white text-slate-600 font-medium py-3 px-6 rounded-xl border border-slate-200 hover:bg-slate-50 hover:text-slate-900 transition-all dark:bg-transparent dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
                                 Cancelar
                             </button>
                         </div>
@@ -1019,15 +1044,19 @@
                     
                     <!-- Rejected Response -->
                     <div id="rejectedResponse" class="hidden text-center">
-                        <div class="mb-6">
-                            <div class="text-6xl mb-4">❌</div>
-                            <h2 class="text-3xl font-bold text-slate-200 mb-4">Orçamento Recusado</h2>
-                            <p class="text-slate-700 dark:text-slate-300 text-lg mb-4">O profissional não aceitou sua solicitação no momento.</p>
-                            <p class="text-slate-600 dark:text-slate-400">Você será notificado de outras propostas em breve.</p>
+                        <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6 dark:bg-red-900/30">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
                         </div>
                         
-                        <button id="closeRejectedBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition">
-                            OK
+                        <h2 class="text-2xl font-bold text-slate-900 mb-4 dark:text-white">Ops, não foi possível</h2>
+                        <p class="text-slate-600 dark:text-slate-300 text-lg mb-8 leading-relaxed">
+                            Nenhum profissional está disponível para atender sua solicitação neste momento.
+                        </p>
+                        
+                        <button id="closeRejectedBtn" onclick="onCancelBudgetClick()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-4 px-6 rounded-xl transition-colors dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-white">
+                            Tentar Novamente Mais Tarde
                         </button>
                     </div>
                 </div>
@@ -1383,7 +1412,7 @@
                         serviceCard.className = 'service-card bg-white rounded-2xl shadow-sm p-6 border border-slate-100 transition-all duration-300 feature-card';
                         
                         const photoHtml = service.photo_patch 
-                            ? `<img src="/${service.photo_patch}" alt="${service.nome_servico}" class="tool-logo mr-4 cursor-pointer" loading="lazy">`
+                            ? `<img src="/storage/${service.photo_patch}" alt="${service.nome_servico}" class="tool-logo mr-4 cursor-pointer" loading="lazy">`
                             : `<div class="tool-icon bg-slate-200 text-slate-500 mr-4">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
@@ -1560,7 +1589,7 @@
             closeBtn.onclick = closeQuoteRequestModal;
             closeQrCodeModalBtn.onclick = closeQrCodeModal;
             
-            // Close modal when clicking outside of it
+             // Close modal when clicking outside of it
             window.onclick = function(event) {
                 if (event.target == quoteRequestModal) {
                     closeQuoteRequestModal();
@@ -1568,9 +1597,7 @@
                 if (event.target == qrCodeModal) {
                     closeQrCodeModal();
                 }
-                if (event.target == loadingModal) {
-                    closeLoadingModal();
-                }
+                // Removed loadingModal closing on outside click to enforce waiting or manual cancellation
             }
             
             // Note: Service image listeners are now handled by initMarcasServicosNavigation()
