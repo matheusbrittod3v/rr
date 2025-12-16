@@ -17,84 +17,102 @@ class ChatRoomController extends Controller
     }
 
     /**
-     * Mostrar página de login da sala
+     * Exibe a página de login da sala de chat
      */
-    public function showLogin($roomCode)
+    public function showLogin(string $roomCode)
     {
         $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
-        
-        return view('chat.login', compact('roomCode', 'chatRoom'));
+
+        return view('chat.login', [
+            'roomCode' => $roomCode,
+            'chatRoom' => $chatRoom,
+        ]);
     }
 
     /**
-     * Autenticar acesso à sala
-     * Usa o mesmo fluxo do pagamento para garantir consistência
+     * Autentica o usuário na sala de chat
+     * Fluxo consistente com pagamento e compatível com Reverb
      */
-    public function authenticate(Request $request, $roomCode)
+    public function authenticate(Request $request, string $roomCode)
     {
         $request->validate([
-            'password' => 'required|string',
+            'password' => ['required', 'string'],
         ]);
 
         $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
 
-        // Validar senha usando o service (retorna 'client' ou 'provider')
-        $userRole = $this->chatService->validatePassword($chatRoom, $request->password);
+        // Valida senha (retorna: client | provider | false)
+        $userRole = $this->chatService->validatePassword(
+            $chatRoom,
+            $request->input('password')
+        );
 
         if (!$userRole) {
-            return back()->withErrors(['password' => 'Senha incorreta.'])->withInput();
+            return back()
+                ->withErrors(['password' => 'Senha incorreta.'])
+                ->withInput();
         }
-        
-        // Usar o método do service para criar a sessão (mesmo usado no pagamento)
-        $this->chatService->setChatRoomSession($chatRoom, $userRole, false);
 
-        // Redirecionar para a sala (mesmo fluxo do pagamento)
-        return redirect()->route('chat.room', $roomCode)
-            ->with('success', 'Autenticado com sucesso!');
+        /**
+         * Cria sessão do chat
+         * NÃO usa Auth do Laravel
+         * NÃO usa flash
+         */
+        $this->chatService->setChatRoomSession(
+            $chatRoom,
+            $userRole,
+            false
+        );
+
+        /**
+         * 🔑 CRÍTICO
+         * Força persistência imediata da sessão
+         * antes do redirect (Echo/Reverb dependem disso)
+         */
+        $request->session()->save();
+
+        Log::info('ChatRoomController: Usuário autenticado no chat', [
+            'roomCode'   => $roomCode,
+            'role'       => $userRole,
+            'session_id' => session()->getId(),
+        ]);
+
+        return redirect()->route('chat.room', $roomCode);
     }
 
     /**
-     * Mostrar a sala de chat
+     * Exibe a sala de chat
+     * Apenas renderiza — NÃO autentica
      */
-    public function showRoom(Request $request, $roomCode)
+    public function showRoom(Request $request, string $roomCode)
     {
-        // Verificar autenticação
+        /**
+         * Segurança: se não estiver autenticado,
+         * nunca tenta "corrigir" estado aqui
+         */
         if (!$this->chatService->isAuthenticated($roomCode)) {
-            // Verificar se é uma sessão fresca de aprovação de pagamento
-            $recentlyAuthenticated = session('authenticated_from_payment', false);
-            
-            if ($recentlyAuthenticated) {
-                // Auto-autenticar como cliente (fluxo de pagamento é do lado do cliente)
-                // Usa o método do service para manter consistência
-                $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
-                $this->chatService->setChatRoomSession($chatRoom, 'client', false);
-                session()->forget('authenticated_from_payment');
-                
-                Log::info('ChatRoomController: Auto-autenticação do fluxo de pagamento', [
-                    'roomCode' => $roomCode,
-                ]);
-            } else {
-                return redirect()->route('chat.login', $roomCode);
-            }
+            return redirect()->route('chat.login', $roomCode);
         }
-        
-        // Garantir que a sessão está salva antes de renderizar a view
-        // Isso é importante para que o Echo possa autenticar o canal privado
-        $session = $request->session();
-        $session->save();
-        
-        Log::info('ChatRoomController: Exibindo sala de chat', [
-            'roomCode' => $roomCode,
-            'sessionId' => $session->getId(),
-            'authenticated_chat_room' => $session->get('authenticated_chat_room'),
-            'chat_user_role' => $session->get('chat_user_role'),
+
+        /**
+         * Garante que a sessão já está escrita
+         * antes da view carregar (Echo conecta ao abrir a página)
+         */
+        $request->session()->save();
+
+        Log::info('ChatRoomController: Sala de chat carregada', [
+            'roomCode'                => $roomCode,
+            'session_id'              => session()->getId(),
+            'authenticated_chat_room' => session('authenticated_chat_room'),
+            'chat_user_role'          => session('chat_user_role'),
         ]);
 
         $chatRoom = ChatRoom::where('room_code', $roomCode)
             ->with('messages')
             ->firstOrFail();
 
-        return view('chat.room', compact('chatRoom'));
+        return view('chat.room', [
+            'chatRoom' => $chatRoom,
+        ]);
     }
 }
-
