@@ -68,4 +68,3 @@ class ChatSessionMiddleware
         return $response;
     }
 }
-
