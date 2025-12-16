@@ -123,10 +123,10 @@
                         <button 
                             type="button" 
                             id="send-button" 
-                            class="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all hover:scale-105 shadow-lg active:scale-95 transform duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                            title="Enviar mensagem"
+                            class="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all hover:scale-105 shadow-lg active:scale-95 transform duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Enviar mensagem (Enter)"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 transition-transform duration-200" id="send-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                             </svg>
                         </button>
@@ -144,6 +144,24 @@
     }
     .animate-fade-in {
         animation: fade-in 0.3s ease-out;
+    }
+    
+    @keyframes send-pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+    }
+    
+    @keyframes rotate-send {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    
+    .sending {
+        animation: send-pulse 0.6s ease-in-out infinite;
+    }
+    
+    .sending #send-icon {
+        animation: rotate-send 0.8s linear infinite;
     }
     
     #chat-messages::-webkit-scrollbar { 
@@ -429,15 +447,31 @@ function initializeChat() {
             // Listener para usuário que entrou
             publicChannel.listen('.user.joined', (data) => {
                 console.log('[Chat] 👋 Usuário entrou:', data);
+                console.log('[Chat] Comparando tipos:', {
+                    received: data.user_type,
+                    current: CHAT_CONFIG.senderType,
+                    isDifferent: data.user_type !== CHAT_CONFIG.senderType
+                });
                 
-                // Atualizar status do outro usuário
-                const otherUserStatus = document.getElementById('other-user-status');
-                if (otherUserStatus && data.user_type !== CHAT_CONFIG.senderType) {
-                    const statusDot = otherUserStatus.querySelector('.w-2.h-2');
-                    if (statusDot) {
-                        statusDot.classList.remove('bg-gray-400');
-                        statusDot.classList.add('bg-green-400');
+                // Atualizar status do outro usuário APENAS se for diferente do nosso tipo
+                if (data.user_type !== CHAT_CONFIG.senderType) {
+                    const otherUserStatus = document.getElementById('other-user-status');
+                    console.log('[Chat] Atualizando status visual do outro usuário');
+                    
+                    if (otherUserStatus) {
+                        const statusDot = otherUserStatus.querySelector('.w-2.h-2');
+                        if (statusDot) {
+                            statusDot.classList.remove('bg-gray-400');
+                            statusDot.classList.add('bg-green-400');
+                            console.log('[Chat] ✅ Status atualizado para verde!');
+                        } else {
+                            console.warn('[Chat] ⚠️ Elemento statusDot não encontrado');
+                        }
+                    } else {
+                        console.warn('[Chat] ⚠️ Elemento other-user-status não encontrado');
                     }
+                } else {
+                    console.log('[Chat] ⏭️ Ignorando próprio evento de entrada');
                 }
             });
             
@@ -488,9 +522,9 @@ async function sendMessage() {
         return;
     }
     
-    // Desabilitar botão durante envio
+    // Desabilitar botão durante envio e adicionar animação
     elements.sendButton.disabled = true;
-    elements.sendButton.classList.add('opacity-50', 'cursor-not-allowed');
+    elements.sendButton.classList.add('opacity-50', 'cursor-not-allowed', 'sending');
     
     try {
         // Enviar via API REST
@@ -531,9 +565,9 @@ async function sendMessage() {
         console.error('[Chat] ❌ Erro ao enviar mensagem:', error);
         alert('Erro ao enviar mensagem: ' + error.message);
     } finally {
-        // Reabilitar botão
+        // Reabilitar botão e remover animação
         elements.sendButton.disabled = false;
-        elements.sendButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        elements.sendButton.classList.remove('opacity-50', 'cursor-not-allowed', 'sending');
     }
 }
 
