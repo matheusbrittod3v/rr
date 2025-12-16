@@ -23,11 +23,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'chat.session' => ChatSessionMiddleware::class,
         ]);
         
-        // Re-enable CSRF middleware for web routes (was previously disabled)
-        // Only remove it from API routes if needed
-        // $middleware->web(remove: [
-        //     \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
-        // ]);
+        // Temporarily disable CSRF middleware for web routes to troubleshoot login issues
+        $middleware->web(remove: [
+            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+        ]);
         
         // Trust proxies para funcionar atrás de Nginx/Cloudflare/etc
         $middleware->trustProxies(at: '*');

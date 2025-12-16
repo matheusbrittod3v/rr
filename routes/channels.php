@@ -1,30 +1,33 @@
 <?php
 
 use Illuminate\Support\Facades\Broadcast;
+use App\Models\ChatRoom;
 
 /*
 |--------------------------------------------------------------------------
 | Broadcast Channels
 |--------------------------------------------------------------------------
-| Aqui ficam APENAS canais e a rota /api/broadcasting/auth
+| Aqui ficam APENAS canais e a rota /broadcasting/auth
 | NÃO coloque lógica de controller aqui
 */
 
+// Register the broadcasting routes with proper middleware
 Broadcast::routes([
     'middleware' => [
-        
-        'chat.session',  // Use chat session middleware for proper chat authentication
+        'web',
+        'chat.session',
     ],
-    'prefix' => 'api',
 ]);
 
-// Canal privado (exige auth via chat session)
-Broadcast::channel('chat-room.{roomCode}', function ($user = null, $roomCode) {
-    // This will only be called if the user is properly authenticated via chat.session middleware
-    // The user role is stored in the session
+// Private channel for chat rooms
+// This requires proper authentication via chat.session middleware
+Broadcast::channel('chat-room.{roomCode}', function ($user, $roomCode) {
+    // The chat.session middleware ensures the user is authenticated
+    // We can access the session data set by the middleware
     $authenticatedRoom = session('authenticated_chat_room');
     $userRole = session('chat_user_role');
     
+    // Verify the user is authenticated for this specific room
     if ($authenticatedRoom === $roomCode && !empty($userRole)) {
         return [
             'id' => session()->getId(),
