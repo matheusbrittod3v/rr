@@ -837,13 +837,27 @@ const CallManager = {
     },
     
     // Handler quando outro lado aceita a chamada
+    // Handler quando outro lado aceita a chamada (Via WebSocket)
     handleCallAccepted() {
-        console.log('[CallManager] Chamada aceita pelo outro usuário!');
+        console.log('[CallManager] Chamada aceita! Mudando interface imediatamente...');
+        
+        // 1. Limpar timeout de "não atendida"
         this.clearCallTimeout();
+        
+        // 2. Parar som de "chamando"
+        SoundManager.stop();
+        
+        // 3. Esconder modal "Chamando..."
+        this.elements.outgoingModal.classList.add('hidden');
+        
+        // 4. Mostrar interface de chamada ativa
+        this.showCallInterface();
+        
+        // 5. Feedback visual de conexão
         this.state.connectionState = 'connecting';
-        // Mostrar feedback que foi aceita, aguardando conexão WebRTC
-        this.showToast('Chamada aceita! Conectando...');
-        // A interface só muda quando receber o answer com a mídia
+        this.showToast('Conectando áudio e vídeo...');
+        
+        // A conexão WebRTC (Offer/Answer) continua em background
     },
     
     // Processar ICE candidate recebido (com queue)
@@ -1125,16 +1139,15 @@ const CallManager = {
     },
     
     async handleAnswer(answer) {
-        console.log('[CallManager] Answer recebido!');
+        console.log('[CallManager] Answer (sinal técnico) recebido!');
         
-        // Limpar timeout - chamada foi atendida
+        // Garantir que UI esteja correta (caso handleCallAccepted não tenha disparado por algum motivo)
         this.clearCallTimeout();
-        
-        // Esconder modal e mostrar interface
         this.elements.outgoingModal.classList.add('hidden');
         SoundManager.stop();
-        this.state.connectionState = 'connected';
         this.showCallInterface();
+        
+        this.state.connectionState = 'connected';
         
         if (!this.state.peerConnection) {
             console.error('[CallManager] PeerConnection não existe para processar answer');
@@ -1144,12 +1157,14 @@ const CallManager = {
         try {
             // Usar objeto simples diretamente
             await this.state.peerConnection.setRemoteDescription(answer);
-            console.log('[CallManager] Remote description (answer) setada');
+            console.log('[CallManager] Conexão estabelecida! (Remote description setada)');
+            
             // Processar ICE candidates que chegaram antes
             await this.processIceCandidateQueue();
         } catch (e) { 
             console.error('[CallManager] Erro ao processar answer:', e);
             console.error('[CallManager] Answer recebido:', JSON.stringify(answer).substring(0, 200));
+            this.showToast('Erro na conexão da chamada');
         }
     },
     
