@@ -77,7 +77,7 @@ if (reverbKey && reverbHost) {
                         
                         // Get the base URL from the environment or use current origin
                         const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-                        const authEndpoint = `${baseUrl}/api/broadcasting/auth`;
+                        const authEndpoint = `${baseUrl}/broadcasting/auth`;
                         
                         console.log('[Echo] Autorizando canal:', {
                             channel: channel.name,
