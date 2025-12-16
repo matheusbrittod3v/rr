@@ -858,7 +858,8 @@ const CallManager = {
         }
         
         try {
-            await this.state.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            // Usar objeto simples diretamente - browser aceita
+            await this.state.peerConnection.addIceCandidate(candidate);
         } catch (error) {
             console.error('[CallManager] Erro ao adicionar ICE candidate:', error);
         }
@@ -866,10 +867,11 @@ const CallManager = {
     
     // Processar queue de ICE candidates
     async processIceCandidateQueue() {
+        console.log(`[CallManager] Processando ${this.state.iceCandidateQueue.length} ICE candidates da queue`);
         while (this.state.iceCandidateQueue.length > 0) {
             const candidate = this.state.iceCandidateQueue.shift();
             try {
-                await this.state.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                await this.state.peerConnection.addIceCandidate(candidate);
             } catch (e) {
                 console.error('[CallManager] Erro ao processar ICE da queue:', e);
             }
@@ -962,11 +964,10 @@ const CallManager = {
         }
         
         try {
-            console.log('[CallManager] Processando offer...');
+            console.log('[CallManager] Processando offer...', offer);
             
-            // Criar RTCSessionDescription do offer
-            const offerDesc = new RTCSessionDescription(offer);
-            await this.state.peerConnection.setRemoteDescription(offerDesc);
+            // Usar objeto simples diretamente - browser aceita {type, sdp}
+            await this.state.peerConnection.setRemoteDescription(offer);
             console.log('[CallManager] Remote description setada');
             
             // Criar answer
@@ -980,13 +981,14 @@ const CallManager = {
                 sdp: answer.sdp
             };
             this.sendSignal('answer', answerData);
-            console.log('[CallManager] Answer enviado:', answerData.type);
+            console.log('[CallManager] Answer enviado');
             
             // Processar ICE candidates pendentes
             await this.processIceCandidateQueue();
             
         } catch (error) {
             console.error('[CallManager] Erro ao processar offer:', error);
+            console.error('[CallManager] Offer recebido:', JSON.stringify(offer).substring(0, 200));
             this.showToast('Erro na conexão');
         }
     },
@@ -1123,6 +1125,8 @@ const CallManager = {
     },
     
     async handleAnswer(answer) {
+        console.log('[CallManager] Answer recebido!');
+        
         // Limpar timeout - chamada foi atendida
         this.clearCallTimeout();
         
@@ -1132,13 +1136,20 @@ const CallManager = {
         this.state.connectionState = 'connected';
         this.showCallInterface();
         
-        if (!this.state.peerConnection) return;
+        if (!this.state.peerConnection) {
+            console.error('[CallManager] PeerConnection não existe para processar answer');
+            return;
+        }
+        
         try {
-            await this.state.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            // Usar objeto simples diretamente
+            await this.state.peerConnection.setRemoteDescription(answer);
+            console.log('[CallManager] Remote description (answer) setada');
             // Processar ICE candidates que chegaram antes
             await this.processIceCandidateQueue();
         } catch (e) { 
-            console.error('[CallManager] Erro ao processar answer:', e); 
+            console.error('[CallManager] Erro ao processar answer:', e);
+            console.error('[CallManager] Answer recebido:', JSON.stringify(answer).substring(0, 200));
         }
     },
     

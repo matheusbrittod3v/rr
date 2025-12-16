@@ -20,7 +20,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
 $event = $argv[1] ?? 'ChatMessageSent';
-$channel = $argv[2] ?? 'chat-room.test'; // Changed from 'private-test' to 'chat-room.test'
+$channel = $argv[2] ?? 'chat-room.test';
 $data = $argv[3] ?? '{"message":"Hello from the console!"}';
 $appId = $argv[4] ?? $_ENV['REVERB_APP_ID'] ?? 'reverb';
 $appKey = $argv[5] ?? $_ENV['REVERB_APP_KEY'] ?? 'reverb';
