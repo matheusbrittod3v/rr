@@ -1168,14 +1168,31 @@ const CallManager = {
             this.state.localStream = await navigator.mediaDevices.getUserMedia(constraints);
             this.elements.localVideo.srcObject = this.state.localStream;
             
+            console.log('[CallManager] 📹 Stream local obtido:', {
+                audio: this.state.localStream.getAudioTracks().length,
+                video: this.state.localStream.getVideoTracks().length
+            });
+            
             // Iniciar Peer
             this.createPeerConnection();
+            
+            // Adicionar tracks ao PeerConnection
             this.state.localStream.getTracks().forEach(track => {
-                this.state.peerConnection.addTrack(track, this.state.localStream);
+                const sender = this.state.peerConnection.addTrack(track, this.state.localStream);
+                console.log('[CallManager] ➕ Track local adicionado:', {
+                    kind: track.kind,
+                    enabled: track.enabled,
+                    readyState: track.readyState
+                });
             });
             
             const offer = await this.state.peerConnection.createOffer();
             await this.state.peerConnection.setLocalDescription(offer);
+            
+            console.log('[CallManager] 📤 Offer criado com', 
+                offer.sdp.match(/m=(audio|video)/g)?.length || 0, 
+                'media lines'
+            );
             
             // Serializar offer com Base64 para proteger SDP
             const offerData = {
@@ -1185,7 +1202,7 @@ const CallManager = {
             
             this.sendSignal('call-start', { type: type });
             this.sendSignal('offer', offerData);
-            console.log('[CallManager] Offer enviado (Base64)');
+            console.log('[CallManager] ✓ Offer enviado (Base64)');
             
         } catch (error) {
             console.error('[CallManager] Erro ao iniciar chamada:', error);
@@ -1226,7 +1243,11 @@ const CallManager = {
             
             this.state.localStream = await navigator.mediaDevices.getUserMedia(constraints);
             this.elements.localVideo.srcObject = this.state.localStream;
-            console.log('[CallManager] Local stream obtido');
+            
+            console.log('[CallManager] 📹 Stream local obtido (accept):', {
+                audio: this.state.localStream.getAudioTracks().length,
+                video: this.state.localStream.getVideoTracks().length
+            });
             
             // Se já tem peer (de tentativas anteriores), fecha
             if (this.state.peerConnection) {
@@ -1235,20 +1256,25 @@ const CallManager = {
             }
             
             this.createPeerConnection();
-            console.log('[CallManager] PeerConnection criado');
+            console.log('[CallManager] ✓ PeerConnection criado');
             
+            // Adicionar tracks ao PeerConnection
             this.state.localStream.getTracks().forEach(track => {
                 this.state.peerConnection.addTrack(track, this.state.localStream);
-                console.log('[CallManager] Track adicionado:', track.kind);
+                console.log('[CallManager] ➕ Track local adicionado:', {
+                    kind: track.kind,
+                    enabled: track.enabled,
+                    readyState: track.readyState
+                });
             });
             
             // Se tem offer guardado, processar agora
             if (this.pendingOffer) {
-                console.log('[CallManager] Processando offer pendente...');
+                console.log('[CallManager] 📥 Processando offer pendente...');
                 await this.processOffer(this.pendingOffer);
                 this.pendingOffer = null;
             } else {
-                console.log('[CallManager] Sem offer pendente, aguardando...');
+                console.log('[CallManager] ⏳ Sem offer pendente, aguardando...');
             }
             
         } catch (error) {
@@ -1466,11 +1492,9 @@ const CallManager = {
         
         console.log('[CallManager] 🔗 PeerConnection criada com config otimizada');
         
-        // Forçar transceivers bidirecionais (sendrecv) para garantir fluxo de mídia
-        // Isso evita problemas onde áudio/vídeo funciona apenas em uma direção
-        this.state.peerConnection.addTransceiver('audio', { direction: 'sendrecv' });
-        this.state.peerConnection.addTransceiver('video', { direction: 'sendrecv' });
-        console.log('[CallManager] 📡 Transceivers bidirecionais configurados');
+        // NOTA: NÃO adicionar transceivers manualmente aqui!
+        // O addTrack() cria transceivers automaticamente com a direção correta (sendrecv)
+        // Criar manualmente ANTES dos tracks causa conflitos de direção
         
         // ICE candidate - serializar corretamente e mostrar tipo
         this.state.peerConnection.onicecandidate = (event) => {
@@ -1506,16 +1530,43 @@ const CallManager = {
             }
         };
         
-        // Remote track
+        // Remote track - com logging detalhado
         this.state.peerConnection.ontrack = (event) => {
-            console.log('[CallManager] 🎵 Track remoto recebido:', event.track.kind);
-            this.state.remoteStream = event.streams[0];
+            const track = event.track;
+            const stream = event.streams[0];
             
-            if (this.elements.remoteVideo) {
-                this.elements.remoteVideo.srcObject = this.state.remoteStream;
+            console.log('[CallManager] 🎵 Track remoto recebido:', {
+                kind: track.kind,
+                id: track.id,
+                enabled: track.enabled,
+                muted: track.muted,
+                readyState: track.readyState
+            });
+            
+            // Verificar se track está ativo
+            if (track.readyState !== 'live') {
+                console.warn('[CallManager] ⚠️ Track remoto NÃO está live:', track.readyState);
             }
+            
+            if (!track.enabled) {
+                console.warn('[CallManager] ⚠️ Track remoto está DESABILITADO');
+            }
+            
+            this.state.remoteStream = stream;
+            
+            // Garantir que vídeo remoto está associado ao stream
+            if (this.elements.remoteVideo) {
+                this.elements.remoteVideo.srcObject = stream;
+                console.log('[CallManager] ✓ Stream remoto associado ao vídeo element');
+                
+                // Forçar play (alguns browsers exigem)
+                this.elements.remoteVideo.play().catch(e => {
+                    console.warn('[CallManager] Erro ao dar play no vídeo remoto:', e.name);
+                });
+            }
+            
             if (this.elements.minimizedVideo) {
-                this.elements.minimizedVideo.srcObject = this.state.remoteStream;
+                this.elements.minimizedVideo.srcObject = stream;
             }
             
             // Limpar timeout de conexão quando receber track
