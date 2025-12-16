@@ -164,7 +164,7 @@
     $chatConfig = [
         'roomCode' => $chatRoom->room_code,
         'senderType' => session('chat_user_role', 'client'),
-        'apiBaseUrl' => url('/api'),
+        'apiBaseUrl' => url('/chat'),
     ];
 @endphp
 
@@ -214,7 +214,7 @@ function handleTypingIndicator() {
 // Enviar indicador de digitação
 async function sendTypingIndicator(isTyping) {
     try {
-        await fetch(`${CHAT_CONFIG.apiBaseUrl}/chat/${CHAT_CONFIG.roomCode}/typing`, {
+        await fetch(`${CHAT_CONFIG.apiBaseUrl}/${CHAT_CONFIG.roomCode}/typing`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -450,7 +450,7 @@ async function sendMessage() {
     
     try {
         // Enviar via API REST
-        const response = await fetch(`${CHAT_CONFIG.apiBaseUrl}/chat/${CHAT_CONFIG.roomCode}/messages`, {
+        const response = await fetch(`${CHAT_CONFIG.apiBaseUrl}/${CHAT_CONFIG.roomCode}/messages`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

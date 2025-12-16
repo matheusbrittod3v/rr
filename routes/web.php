@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\ChatMessageController;
 use App\Http\Controllers\Api\DhruController;
 use App\Http\Controllers\Api\MercadoPagoController;
 use App\Http\Controllers\Api\NotificationController;
@@ -8,14 +9,11 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RegistrationLinkController;
 use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\WhatsApiController;
-use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index']);
 
 Route::get('/sitemap.xml', [SitemapController::class, 'index']);
-
-
 
 // Rota de debug para verificar sessão (remover em produção)
 Route::get('/debug-session', function () {
@@ -89,16 +87,22 @@ Route::get('/history', [PaymentController::class, 'showHistory'])->name('payment
 Route::prefix('chat')->group(function () {
     // Login - sem autenticação necessária
     Route::get('/{roomCode}', [\App\Http\Controllers\ChatRoomController::class, 'showLogin'])->name('chat.login');
-    
+
     // Autenticação - sem middleware de sessão (ainda não está autenticado)
     Route::post('/{roomCode}/authenticate', [\App\Http\Controllers\ChatRoomController::class, 'authenticate'])->name('chat.authenticate');
-    
+
     // Sala de chat - REQUER autenticação via middleware
     Route::get('/{roomCode}/room', [\App\Http\Controllers\ChatRoomController::class, 'showRoom'])
         ->middleware('chat.session')
         ->name('chat.room');
-});
 
+    // API de chat - rotas que precisam de sessão (movidas de api.php para web.php)
+    Route::prefix('/{roomCode}')->group(function () {
+        Route::post('/messages', [ChatMessageController::class, 'sendMessage'])->name('chat.api.sendMessage');
+        Route::get('/messages', [ChatMessageController::class, 'getMessages'])->name('chat.api.getMessages');
+        Route::post('/typing', [ChatMessageController::class, 'sendTypingIndicator'])->name('chat.api.typing');
+    });
+});
 
 // WhatsApp QR Code endpoint (única instância - uso interno)
 Route::get('/whatsapp/qr-code', [WhatsApiController::class, 'getQrCode'])->middleware('auth');
