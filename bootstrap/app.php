@@ -5,7 +5,9 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\VerifyMercadoPagoNotification;
 use App\Http\Middleware\ChatSessionMiddleware;
-use App\Http\Middleware\CorsMiddleware;
+use Illuminate\Http\Middleware\HandleCors;
+
+
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -16,9 +18,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Add CORS middleware to the global middleware stack
-        $middleware->append(CorsMiddleware::class);
         
+        // Registrar o middleware CORS
+        $middleware->prepend(HandleCors::class);
         $middleware->alias([
             'verify.mercadopago' => VerifyMercadoPagoNotification::class,
             'chat.session' => ChatSessionMiddleware::class,
