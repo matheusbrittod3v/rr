@@ -11,37 +11,10 @@ use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\WhatsApiController;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Response;
 
 Route::get('/', [HomeController::class, 'index']);
 
 Route::get('/sitemap.xml', [SitemapController::class, 'index']);
-
-// Custom broadcasting route with CORS support
-Route::post('/broadcasting/auth', function (Request $request) {
-    if ($request->hasSession()) {
-        $request->session()->reflash();
-    }
-    
-    $response = \Illuminate\Support\Facades\Broadcast::auth($request);
-    
-    // Add CORS headers
-    return $response->header('Access-Control-Allow-Origin', '*')
-                   ->header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-                   ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-CSRF-TOKEN')
-                   ->header('Access-Control-Allow-Credentials', 'true');
-})->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class]);
-
-// Handle preflight OPTIONS requests for CORS
-Route::options('/broadcasting/auth', function () {
-    return response('', 200)
-        ->header('Access-Control-Allow-Origin', '*')
-        ->header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-CSRF-TOKEN')
-        ->header('Access-Control-Allow-Credentials', 'true')
-        ->header('Access-Control-Max-Age', '86400');
-});
 
 // Rotas de broadcasting para autorização de canais privados
 Broadcast::routes(['middleware' => ['web']]);
