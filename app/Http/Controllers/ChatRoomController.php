@@ -6,6 +6,7 @@ use App\Models\ChatRoom;
 use App\Services\ChatService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Exception;
 
 class ChatRoomController extends Controller
 {
@@ -44,58 +45,63 @@ class ChatRoomController extends Controller
      */
     public function authenticate(Request $request, string $roomCode)
     {
-        // Log para debug do CSRF
-        Log::debug('ChatRoomController: Tentativa de autenticação', [
-            'roomCode' => $roomCode,
-            'has_session' => $request->hasSession(),
-            'session_id' => $request->hasSession() ? $request->session()->getId() : null,
-            'csrf_token_in_request' => $request->has('_token'),
-            'csrf_token_in_header' => $request->hasHeader('X-CSRF-TOKEN'),
-        ]);
+        try {
+            // Log para debug do CSRF
+            Log::debug('ChatRoomController: Tentativa de autenticação', [
+                'roomCode' => $roomCode,
+                'has_session' => $request->hasSession(),
+                'session_id' => $request->hasSession() ? $request->session()->getId() : null,
+                'csrf_token_in_request' => $request->has('_token'),
+                'csrf_token_in_header' => $request->hasHeader('X-CSRF-TOKEN'),
+            ]);
 
-        $request->validate([
-            'password' => ['required', 'string'],
-        ]);
+            $validated = $request->validate([
+                'password' => ['required', 'string'],
+            ]);
 
-        $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
+            $chatRoom = ChatRoom::where('room_code', $roomCode)->firstOrFail();
 
-        // Valida senha (retorna: client | provider | false)
-        $userRole = $this->chatService->validatePassword(
-            $chatRoom,
-            $request->input('password')
-        );
+            // Valida senha (retorna: client | provider | false)
+            $userRole = $this->chatService->validatePassword(
+                $chatRoom,
+                $validated['password']
+            );
 
-        if (!$userRole) {
+            if (!$userRole) {
+                return back()
+                    ->withErrors(['password' => 'Senha incorreta.'])
+                    ->withInput();
+            }
+
+            /**
+             * Cria sessão do chat
+             * NÃO usa Auth do Laravel
+             * NÃO usa flash
+             */
+            $this->chatService->setChatRoomSession(
+                $chatRoom,
+                $userRole,
+                false
+            );
+
+            Log::info('ChatRoomController: Usuário autenticado no chat', [
+                'roomCode'   => $roomCode,
+                'role'       => $userRole,
+                'session_id' => session()->getId(),
+            ]);
+
+            return redirect()->route('chat.room', $roomCode);
+        } catch (\Exception $e) {
+            Log::error('ChatRoomController: Erro durante autenticação', [
+                'roomCode' => $roomCode,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return back()
-                ->withErrors(['password' => 'Senha incorreta.'])
+                ->withErrors(['password' => 'Ocorreu um erro durante a autenticação. Por favor, tente novamente.'])
                 ->withInput();
         }
-
-        /**
-         * Cria sessão do chat
-         * NÃO usa Auth do Laravel
-         * NÃO usa flash
-         */
-        $this->chatService->setChatRoomSession(
-            $chatRoom,
-            $userRole,
-            false
-        );
-
-        /**
-         * 🔑 CRÍTICO
-         * Força persistência imediata da sessão
-         * antes do redirect (Echo/Reverb dependem disso)
-         */
-        $request->session()->save();
-
-        Log::info('ChatRoomController: Usuário autenticado no chat', [
-            'roomCode'   => $roomCode,
-            'role'       => $userRole,
-            'session_id' => session()->getId(),
-        ]);
-
-        return redirect()->route('chat.room', $roomCode);
     }
 
     /**

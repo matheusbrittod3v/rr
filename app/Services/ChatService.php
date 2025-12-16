@@ -110,7 +110,6 @@ class ChatService
             // Save the session immediately to ensure it's available
             session()->save();
             
-            // Log for debugging
             Log::info('Chat room session set', [
                 'room_code' => $chatRoom->room_code,
                 'user_role' => $userRole,
@@ -125,6 +124,7 @@ class ChatService
                 'from_payment' => $fromPayment,
                 'error' => $e->getMessage()
             ]);
+            throw $e; // Re-throw the exception so it can be handled upstream
         }
     }
 }

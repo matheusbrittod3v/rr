@@ -51,19 +51,21 @@ class ChatSessionMiddleware
                 ->with('error', 'Você precisa fazer login para acessar esta sala.');
         }
 
-        // Garantir que a sessão está salva antes de continuar
-        // Isso é crítico para que o Echo possa autenticar o canal privado
-        if ($request->hasSession()) {
-            $request->session()->save();
-        }
-
         Log::debug('ChatSessionMiddleware: Usuário autenticado', [
             'roomCode' => $roomCode,
             'session_id' => $request->session()->getId(),
             'role' => session('chat_user_role'),
         ]);
 
-        return $next($request);
+        $response = $next($request);
+
+        // Garantir que a sessão está salva após o processamento
+        // Isso é crítico para que o Echo possa autenticar o canal privado
+        if ($request->hasSession()) {
+            $request->session()->save();
+        }
+
+        return $response;
     }
 }
 
