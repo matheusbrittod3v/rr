@@ -131,8 +131,40 @@
 
             <!-- Message Input -->
             <div class="bg-white border-t border-gray-200 p-4">
+                <!-- File Preview Area (Hidden by default) -->
+                <div id="file-preview-container" class="hidden mb-3 p-3 bg-gray-50 border border-gray-200 rounded-xl">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <!-- Image Preview -->
+                            <div id="image-preview" class="hidden">
+                                <img id="preview-image" src="" alt="Preview" class="h-20 w-20 object-cover rounded-lg border-2 border-blue-500">
+                            </div>
+                            
+                            <!-- File Preview -->
+                            <div id="file-preview" class="hidden flex items-center space-x-2 p-2 bg-white rounded-lg border border-gray-300">
+                                <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                </svg>
+                                <div>
+                                    <p id="file-name" class="text-sm font-medium text-gray-700"></p>
+                                    <p id="file-size" class="text-xs text-gray-500"></p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button type="button" id="cancel-file-btn" class="p-1 text-red-500 hover:bg-red-50 rounded-full transition-colors" title="Remover arquivo">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
                 <form id="chat-form" class="flex items-end space-x-3" onsubmit="return false;">
                     @csrf
+                    <!-- Hidden File Input -->
+                    <input type="file" id="file-input" class="hidden" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar">
+                    
                     <div class="flex-1">
                         <textarea 
                             id="message-input" 
@@ -148,6 +180,19 @@
                     </div>
                     
                     <div class="flex space-x-2 pb-8">
+                        <!-- Attach File Button -->
+                        <button 
+                            type="button" 
+                            id="attach-file-btn" 
+                            class="p-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-xl transition-all hover:scale-105 shadow-sm active:scale-95 transform duration-150 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+                            title="Anexar arquivo/imagem"
+                        >
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                            </svg>
+                        </button>
+                        
+                        <!-- Send Button -->
                         <button 
                             type="button" 
                             id="send-button" 
@@ -563,8 +608,10 @@ function initializeChat() {
 
 async function sendMessage() {
     const message = elements.messageInput.value.trim();
+    const fileInput = document.getElementById('file-input');
+    const hasFile = fileInput.files.length > 0;
     
-    if (!message) {
+    if (!message && !hasFile) {
         return;
     }
     
@@ -578,16 +625,21 @@ async function sendMessage() {
     elements.sendButton.classList.add('opacity-50', 'cursor-not-allowed', 'sending');
     
     try {
+        // Usar FormData para enviar arquivo + mensagem
+        const formData = new FormData();
+        formData.append('message', message || '');
+        
+        if (hasFile) {
+            formData.append('file', fileInput.files[0]);
+        }
+        
         // Enviar via API REST
         const response = await fetch(`${CHAT_CONFIG.apiBaseUrl}/${CHAT_CONFIG.roomCode}/messages`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
             },
-            body: JSON.stringify({
-                message: message,
-            }),
+            body: formData,
         });
         
         const result = await response.json();
@@ -601,10 +653,11 @@ async function sendMessage() {
         // Adicionar mensagem localmente (otimista)
         addMessageToChat(result.data);
         
-        // Limpar input
+        // Limpar input e arquivo
         elements.messageInput.value = '';
         elements.messageInput.style.height = 'auto';
         elements.charCount.textContent = '0/1000';
+        clearFilePreview();
         
         // Parar indicador de digitação
         if (typingTimeout) {
@@ -621,6 +674,113 @@ async function sendMessage() {
         elements.sendButton.classList.remove('opacity-50', 'cursor-not-allowed', 'sending');
     }
 }
+
+// ========== GERENCIAMENTO DE ARQUIVOS ==========
+
+let selectedFile = null;
+
+// Botão de anexar arquivo
+document.getElementById('attach-file-btn')?.addEventListener('click', () => {
+    document.getElementById('file-input').click();
+});
+
+// Quando arquivo é selecionado
+document.getElementById('file-input')?.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        handleFileSelection(file);
+    }
+});
+
+// Botão de cancelar arquivo
+document.getElementById('cancel-file-btn')?.addEventListener('click', () => {
+    clearFilePreview();
+});
+
+// Função para mostrar preview do arquivo
+function handleFileSelection(file) {
+    // Validar tamanho (máx 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+        alert('Arquivo muito grande! Tamanho máximo: 10MB');
+        clearFilePreview();
+        return;
+    }
+    
+    selectedFile = file;
+    
+    const previewContainer = document.getElementById('file-preview-container');
+    const imagePreview = document.getElementById('image-preview');
+    const filePreview = document.getElementById('file-preview');
+    const previewImage = document.getElementById('preview-image');
+    const fileName = document.getElementById('file-name');
+    const fileSize = document.getElementById('file-size');
+    
+    // Mostrar container
+    previewContainer.classList.remove('hidden');
+    
+    // Verificar se é imagem
+    const isImage = file.type.startsWith('image/');
+    
+    if (isImage) {
+        // Mostrar preview de imagem
+        imagePreview.classList.remove('hidden');
+        filePreview.classList.add('hidden');
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            previewImage.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    } else {
+        // Mostrar preview de arquivo genérico
+        imagePreview.classList.add('hidden');
+        filePreview.classList.remove('hidden');
+        
+        fileName.textContent = file.name;
+        fileSize.textContent = formatFileSize(file.size);
+    }
+}
+
+// Limpar preview
+function clearFilePreview() {
+    document.getElementById('file-input').value = '';
+    document.getElementById('file-preview-container').classList.add('hidden');
+    document.getElementById('image-preview').classList.add('hidden');
+    document.getElementById('file-preview').classList.add('hidden');
+    selectedFile = null;
+}
+
+// Formatar tamanho do arquivo
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// Drag and Drop (opcional)
+const chatMessages = document.getElementById('chat-messages');
+chatMessages?.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    chatMessages.classList.add('bg-blue-50');
+});
+
+chatMessages?.addEventListener('dragleave', () => {
+    chatMessages.classList.remove('bg-blue-50');
+});
+
+chatMessages?.addEventListener('drop', (e) => {
+    e.preventDefault();
+    chatMessages.classList.remove('bg-blue-50');
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        const fileInput = document.getElementById('file-input');
+        fileInput.files = files;
+        handleFileSelection(files[0]);
+    }
+});
+
 
 // ========== WEBRTC CALL SYSTEM (PRO) ==========
 
