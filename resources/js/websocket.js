@@ -48,9 +48,6 @@ console.log('[Echo] Configurando Laravel Echo com Reverb:', {
 // Reverb implementa o protocolo Pusher, então o Echo fala protocolo Pusher
 if (reverbKey && reverbHost) {
     try {
-        // Obter CSRF token
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-        
         // Configuração base do Echo
         const echoConfig = {
             broadcaster: 'pusher', // ✅ CORRETO: sempre 'pusher', mesmo com Reverb
@@ -60,77 +57,9 @@ if (reverbKey && reverbHost) {
             enabledTransports: ['ws', 'wss'],
             disableStats: true, // Desabilita estatísticas do Pusher (não necessário para Reverb)
             cluster: 'mt1', // Cluster padrão (ignorado quando wsHost é customizado, mas necessário para Pusher.js)
-            authEndpoint: '/broadcasting/auth', // Endpoint para autorização de canais privados
-            withCredentials: true, // 🔥 ESSENCIAL: Envia cookies de sessão para requisições cross-origin/porta
-            auth: {
-                headers: {
-                    'X-CSRF-TOKEN': csrfToken,
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json',
-                }
-            },
             // Usar authorizer customizado para garantir que cookies sejam enviados
-            authorizer: (channel, options) => {
-                return {
-                    authorize: (socketId, callback) => {
-                        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-                        
-                        // Get the base URL from the environment or use current origin
-                        const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-                        const authEndpoint = `${baseUrl}/broadcasting/auth`;
-                        
-                        console.log('[Echo] Autorizando canal:', {
-                            channel: channel.name,
-                            socketId: socketId,
-                            hasCsrfToken: !!csrfToken,
-                            authEndpoint: authEndpoint
-                        });
-                        
-                        fetch(authEndpoint, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRF-TOKEN': csrfToken,
-                                'X-Requested-With': 'XMLHttpRequest',
-                                'Accept': 'application/json',
-                            },
-                            credentials: 'include', // 🔥 ESSENCIAL: Envia cookies mesmo em requisições cross-origin/porta
-                            body: JSON.stringify({
-                                socket_id: socketId,
-                                channel_name: channel.name
-                            })
-                        })
-                        .then(response => {
-                            console.log('[Echo] Resposta da autorização:', {
-                                status: response.status,
-                                ok: response.ok
-                            });
-                            
-                            if (!response.ok) {
-                                return response.json().then(data => {
-                                    throw new Error(`HTTP ${response.status}: ${JSON.stringify(data)}`);
-                                });
-                            }
-                            return response.json();
-                        })
-                        .then(data => {
-                            console.log('[Echo] ✅ Autorização bem-sucedida');
-                            callback(null, data);
-                        })
-                        .catch(error => {
-                            console.error('[Echo] ❌ Erro na autorização:', error);
-                            callback(error, null);
-                        });
-                    }
-                };
-            }
+            authorizer: null, // Não é necessário para canais públicos
         };
-        
-        console.log('[Echo] Configuração de autenticação:', {
-            hasAuthorizer: !!echoConfig.authorizer,
-            hasCsrfToken: !!csrfToken,
-            csrfTokenLength: csrfToken.length,
-        });
 
         // Em produção HTTPS (porta 443), não especificamos porta (usa padrão 443)
         // Em desenvolvimento ou porta customizada, especificamos a porta
@@ -191,7 +120,7 @@ export function listenToPaymentUpdates(paymentId, callback) {
             });
 
         // Listen to specific payment updates
-        window.Echo.private(`payments.${paymentId}`)
+        window.Echo.channel(`payments.${paymentId}`)
             .listen('PaymentStatusUpdated', (event) => {
                 console.log('Specific payment status updated:', event);
                 if (callback && typeof callback === 'function') {
@@ -203,7 +132,7 @@ export function listenToPaymentUpdates(paymentId, callback) {
 
 export function listenToChatMessages(roomId, callback) {
     if (window.Echo) {
-        // Listen to chat room messages
+        // Listen to chat room messages on public channel
         window.Echo.channel(`chat-room.${roomId}`)
             .listen('ChatMessageSent', (event) => {
                 console.log('New chat message:', event);

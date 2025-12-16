@@ -33,34 +33,12 @@ class ChatSessionMiddleware
         // Obter roomCode da rota se não foi passado como parâmetro
         $roomCode = $roomCode ?? $request->route('roomCode');
 
-        // Para requisições de broadcasting, verificar se é uma requisição de autenticação de canal
-        $isBroadcastingAuth = $request->is('api/broadcasting/auth');
-        
-        if (!$roomCode && !$isBroadcastingAuth) {
+        if (!$roomCode) {
             Log::warning('ChatSessionMiddleware: roomCode não encontrado na requisição');
             abort(404, 'Sala de chat não encontrada');
         }
 
-        // Se for uma requisição de autenticação de canal, permitir que prossiga
-        // desde que haja uma sessão válida
-        if ($isBroadcastingAuth) {
-            // Verificar se há sessão ativa
-            if (!$request->hasSession() || !$request->session()->isStarted()) {
-                Log::warning('ChatSessionMiddleware: Sessão não encontrada ou não iniciada para broadcasting auth');
-                return response()->json(['error' => 'Sessão não encontrada'], 401);
-            }
-            
-            // Para broadcasting auth, basta ter uma sessão válida
-            Log::debug('ChatSessionMiddleware: Sessão válida para broadcasting auth', [
-                'session_id' => $request->session()->getId(),
-                'authenticated_room' => session('authenticated_chat_room'),
-                'user_role' => session('chat_user_role'),
-            ]);
-            
-            return $next($request);
-        }
-
-        // Verificar se está autenticado na sala (para acesso normal às rotas)
+        // Verificar se está autenticado na sala
         if (!$this->chatService->isAuthenticated($roomCode)) {
             Log::info('ChatSessionMiddleware: Usuário não autenticado', [
                 'roomCode' => $roomCode,
