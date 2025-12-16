@@ -631,25 +631,59 @@ async function sendMessage() {
         formData.append('message', message || '');
         
         if (hasFile) {
-            formData.append('file', fileInput.files[0]);
+            const file = fileInput.files[0];
+            formData.append('file', file);
+            console.log('[Chat] 📎 Arquivo anexado:', {
+                name: file.name,
+                size: file.size,
+                type: file.type
+            });
         }
+        
+        // Verificar CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (!csrfToken) {
+            console.error('[Chat] ⚠️ CSRF token não encontrado!');
+            throw new Error('Token de segurança não encontrado. Recarregue a página.');
+        }
+        
+        console.log('[Chat] 📤 Enviando mensagem...', {
+            hasMessage: !!message,
+            hasFile: hasFile,
+            messageLength: message?.length || 0
+        });
         
         // Enviar via API REST
         const response = await fetch(`${CHAT_CONFIG.apiBaseUrl}/${CHAT_CONFIG.roomCode}/messages`, {
             method: 'POST',
             headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                'X-CSRF-TOKEN': csrfToken,
             },
             body: formData,
         });
         
-        const result = await response.json();
+        console.log('[Chat] 📥 Resposta recebida:', {
+            status: response.status,
+            statusText: response.statusText,
+            ok: response.ok
+        });
         
-        if (!result.success) {
-            throw new Error(result.message || 'Erro ao enviar mensagem');
+        // Verificar se resposta é JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            console.error('[Chat] ❌ Resposta não é JSON:', text);
+            throw new Error('Erro no servidor. Resposta inválida.');
         }
         
-        console.log('[Chat] ✅ Mensagem enviada via API:', result.data);
+        const result = await response.json();
+        
+        if (!response.ok || !result.success) {
+            console.error('[Chat] ❌ Erro na resposta:', result);
+            throw new Error(result.message || `Erro HTTP ${response.status}`);
+        }
+        
+        console.log('[Chat] ✅ Mensagem enviada com sucesso:', result.data);
         
         // Adicionar mensagem localmente (otimista)
         addMessageToChat(result.data);
@@ -668,7 +702,23 @@ async function sendMessage() {
         
     } catch (error) {
         console.error('[Chat] ❌ Erro ao enviar mensagem:', error);
-        alert('Erro ao enviar mensagem: ' + error.message);
+        console.error('[Chat] Stack trace:', error.stack);
+        
+        // Mensagem de erro mais específica
+        let errorMessage = 'Erro ao enviar mensagem.';
+        
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            errorMessage = 'Erro de conexão. Verifique sua internet.';
+        } else if (error.message.includes('CSRF')) {
+            errorMessage = 'Erro de segurança. Recarregue a página (F5).';
+        } else if (error.message.includes('413') || error.message.includes('too large')) {
+            errorMessage = 'Arquivo muito grande. Máximo 10MB.';
+        } else {
+            errorMessage = error.message;
+        }
+        
+        alert(errorMessage);
+        
     } finally {
         // Reabilitar botão e remover animação
         elements.sendButton.disabled = false;

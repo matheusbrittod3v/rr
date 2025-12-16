@@ -80,30 +80,71 @@ class ChatMessageController extends Controller
             if ($request->hasFile('file')) {
                 $file = $request->file('file');
                 
-                // Validar tipo de arquivo
+                Log::info('Upload de arquivo no chat', [
+                    'room_code' => $roomCode,
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getMimeType(),
+                    'size' => $file->getSize(),
+                ]);
+                
+                // Validar tipo de arquivo (mais permissivo)
                 $allowedMimes = [
-                    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+                    // Imagens
+                    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
+                    // Documentos
                     'application/pdf',
                     'application/msword',
                     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'application/vnd.ms-excel',
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'text/plain',
+                    // Compactados
+                    'application/zip',
+                    'application/x-rar-compressed',
+                    'application/x-zip-compressed',
                 ];
 
-                if (!in_array($file->getMimeType(), $allowedMimes)) {
+                $fileMimeType = $file->getMimeType();
+                
+                if (!in_array($fileMimeType, $allowedMimes)) {
+                    Log::warning('Tipo de arquivo não permitido', [
+                        'mime_type' => $fileMimeType,
+                        'allowed' => $allowedMimes,
+                    ]);
+                    
                     return response()->json([
                         'success' => false,
-                        'message' => 'Tipo de arquivo não permitido',
+                        'message' => "Tipo de arquivo não permitido: {$fileMimeType}",
                     ], 422);
                 }
 
-                // Salvar arquivo
-                $fileName = time() . '_' . $file->getClientOriginalName();
-                $filePath = $file->storeAs('chat_files/' . $roomCode, $fileName, 'public');
-                
-                // Determinar tipo de arquivo
-                if (str_starts_with($file->getMimeType(), 'image/')) {
-                    $fileType = 'image';
-                } else {
-                    $fileType = 'document';
+                try {
+                    // Salvar arquivo
+                    $fileName = time() . '_' . $file->getClientOriginalName();
+                    $filePath = $file->storeAs('chat_files/' . $roomCode, $fileName, 'public');
+                    
+                    Log::info('Arquivo salvo com sucesso', [
+                        'file_path' => $filePath,
+                        'file_name' => $fileName,
+                    ]);
+                    
+                    // Determinar tipo de arquivo
+                    if (str_starts_with($fileMimeType, 'image/')) {
+                        $fileType = 'image';
+                    } else {
+                        $fileType = 'document';
+                    }
+                    
+                } catch (\Exception $e) {
+                    Log::error('Erro ao salvar arquivo', [
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                    ]);
+                    
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Erro ao salvar arquivo: ' . $e->getMessage(),
+                    ], 500);
                 }
             }
 
