@@ -978,10 +978,21 @@ const CallManager = {
         }
         
         try {
-            console.log('[CallManager] Processando offer...', offer);
+            console.log('[CallManager] Processando offer...');
             
-            // Usar objeto simples diretamente - browser aceita {type, sdp}
-            await this.state.peerConnection.setRemoteDescription(offer);
+            // Decodificar Base64 se necessário
+            let sdp = offer.sdp;
+            // Verificar simples se parece Base64 (sem espaços, == no final, etc) ou se contém "v=0"
+            if (!offer.sdp.includes('v=0')) {
+                 try { sdp = atob(offer.sdp); } catch(e) { console.log('SDP não era base64'); }
+            }
+            
+            const offerData = new RTCSessionDescription({
+                type: offer.type,
+                sdp: sdp
+            });
+            
+            await this.state.peerConnection.setRemoteDescription(offerData);
             console.log('[CallManager] Remote description setada');
             
             // Criar answer
@@ -989,13 +1000,13 @@ const CallManager = {
             await this.state.peerConnection.setLocalDescription(answer);
             console.log('[CallManager] Local description setada');
             
-            // Enviar answer como objeto simples (type + sdp)
+            // Enviar answer Base64
             const answerData = {
                 type: answer.type,
-                sdp: answer.sdp
+                sdp: btoa(answer.sdp)
             };
             this.sendSignal('answer', answerData);
-            console.log('[CallManager] Answer enviado');
+            console.log('[CallManager] Answer enviado (Base64)');
             
             // Processar ICE candidates pendentes
             await this.processIceCandidateQueue();
@@ -1057,15 +1068,15 @@ const CallManager = {
             const offer = await this.state.peerConnection.createOffer();
             await this.state.peerConnection.setLocalDescription(offer);
             
-            // Serializar offer como objeto simples
+            // Serializar offer com Base64 para proteger SDP
             const offerData = {
                 type: offer.type,
-                sdp: offer.sdp
+                sdp: btoa(offer.sdp) // Codificar Base64
             };
             
             this.sendSignal('call-start', { type: type });
             this.sendSignal('offer', offerData);
-            console.log('[CallManager] Offer enviado');
+            console.log('[CallManager] Offer enviado (Base64)');
             
         } catch (error) {
             console.error('[CallManager] Erro ao iniciar chamada:', error);
@@ -1155,8 +1166,19 @@ const CallManager = {
         }
         
         try {
-            // Usar objeto simples diretamente
-            await this.state.peerConnection.setRemoteDescription(answer);
+        try {
+            // Decodificar Base64 se necessário
+            let sdp = answer.sdp;
+            if (!answer.sdp.includes('v=0')) {
+                 try { sdp = atob(answer.sdp); } catch(e) { console.log('SDP (answer) não era base64'); }
+            }
+            
+            const answerData = new RTCSessionDescription({
+                type: answer.type,
+                sdp: sdp
+            });
+
+            await this.state.peerConnection.setRemoteDescription(answerData);
             console.log('[CallManager] Conexão estabelecida! (Remote description setada)');
             
             // Processar ICE candidates que chegaram antes
@@ -1389,7 +1411,7 @@ const CallManager = {
             try {
                 const offer = await this.state.peerConnection.createOffer({ iceRestart: true });
                 await this.state.peerConnection.setLocalDescription(offer);
-                const offerData = { type: offer.type, sdp: offer.sdp };
+                const offerData = { type: offer.type, sdp: btoa(offer.sdp) };
                 this.sendSignal('offer', offerData);
             } catch (e) {
                 console.error('[CallManager] Erro ao tentar reconexão:', e);
