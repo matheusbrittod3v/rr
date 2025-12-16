@@ -691,7 +691,7 @@ const SoundManager = {
 };
 
 const CallManager = {
-    // Configuração Enterprise
+    // Config WebRTC - Otimizado para máxima estabilidade
     config: {
         iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
@@ -700,9 +700,25 @@ const CallManager = {
             { urls: 'stun:stun3.l.google.com:19302' },
             { urls: 'stun:stun4.l.google.com:19302' }
         ],
-        callTimeout: 45000, // 45 segundos para atender
-        reconnectDelay: 2000,
-        maxReconnectAttempts: 3
+        // Configurações de ICE mais agressivas
+        iceCandidatePoolSize: 10, // Pré-gerar candidates
+        iceTransportPolicy: 'all', // Usar todos os transports disponíveis
+        bundlePolicy: 'max-bundle', // Agrupar mídia em uma conexão
+        rtcpMuxPolicy: 'require', // Multiplexar RTCP
+        
+        callTimeout: 60000, // 60 segundos para atender (mais tempo)
+        connectionTimeout: 30000, // 30 segundos para estabelecer conexão WebRTC
+        reconnectDelay: 1500, // Delay inicial de reconexão
+        maxReconnectAttempts: 5, // Mais tentativas
+        reconnectBackoffMultiplier: 1.5, // Exponential backoff
+        
+        // Retry de sinalização
+        signalRetryAttempts: 3,
+        signalRetryDelay: 1000,
+        
+        // Heartbeat
+        heartbeatInterval: 5000, // Verificar conexão a cada 5s
+        heartbeatTimeout: 15000 // 15s sem resposta = reconectar
     },
     
     // Estado
@@ -720,11 +736,20 @@ const CallManager = {
         statsInterval: null,
         isInitiator: false,
         isFrontCamera: true,
-        // Novos campos enterprise
+        // Campos enterprise
         callTimeoutId: null,
+        connectionTimeoutId: null,
         iceCandidateQueue: [],
         reconnectAttempts: 0,
-        connectionState: 'idle' // idle, calling, ringing, connecting, connected, reconnecting
+        connectionState: 'idle', // idle, calling, ringing, connecting, connected, reconnecting
+        // Novos campos para estabilidade
+        heartbeatInterval: null,
+        lastHeartbeat: null,
+        bytesReceived: 0,
+        lastBytesReceived: 0,
+        consecutiveFailures: 0,
+        isReconnecting: false,
+        signalRetryQueue: [] // Para retry de sinalizações
     },
     
     // Elementos UI
@@ -783,10 +808,10 @@ const CallManager = {
         this.elements.flipBtn?.addEventListener('click', () => this.flipCamera());
     },
     
-    // Sinalização
-    async sendSignal(type, data = null) {
+    // Sinalização com Retry Automático
+    async sendSignal(type, data = null, attempt = 1) {
         try {
-            await fetch(`${CHAT_CONFIG.apiBaseUrl}/${CHAT_CONFIG.roomCode}/call-signal`, {
+            const response = await fetch(`${CHAT_CONFIG.apiBaseUrl}/${CHAT_CONFIG.roomCode}/call-signal`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -797,9 +822,49 @@ const CallManager = {
                     signal_data: data
                 })
             });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.message || 'Sinal falhou');
+            }
+            
+            // Sucesso! Resetar contadores
+            this.state.consecutiveFailures = 0;
+            console.log(`[CallManager] ✓ Sinal enviado: ${type} (tentativa ${attempt})`);
+            return true;
+            
         } catch (error) {
-            console.error('[CallManager] Erro ao enviar sinal:', error);
+            console.error(`[CallManager] ✗ Erro ao enviar sinal ${type} (tentativa ${attempt}):`, error);
+            
+            // Tentar novamente se não atingiu o máximo
+            if (attempt < this.config.signalRetryAttempts) {
+                const delay = this.config.signalRetryDelay * Math.pow(1.5, attempt - 1);
+                console.log(`[CallManager] ↻ Tentando novamente em ${delay}ms...`);
+                
+                await this.sleep(delay);
+                return this.sendSignal(type, data, attempt + 1);
+            }
+            
+            // Falhou após todas as tentativas
+            this.state.consecutiveFailures++;
+            console.error(`[CallManager] ✗✗✗ Falha permanente ao enviar ${type} após ${attempt} tentativas`);
+            
+            // Se muitas falhas consecutivas, pode ser problema de rede
+            if (this.state.consecutiveFailures >= 3) {
+                this.showToast('Problemas de conexão detectados');
+            }
+            
+            return false;
         }
+    },
+    
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     },
     
     // Handler de eventos
@@ -1217,16 +1282,23 @@ const CallManager = {
     },
     
     resetCall() {
+        console.log('[CallManager] 🧹 Limpando chamada...');
         SoundManager.stop();
         this.clearCallTimeout();
+        this.clearConnectionTimeout();
+        this.stopHeartbeat();
         
         // Parar tracks
         if (this.state.localStream) {
-            this.state.localStream.getTracks().forEach(track => track.stop());
+            this.state.localStream.getTracks().forEach(track => {
+                track.stop();
+                console.log('[CallManager] ⏹ Track parado:', track.kind);
+            });
         }
         
         if (this.state.peerConnection) {
             this.state.peerConnection.close();
+            console.log('[CallManager] 🔌 PeerConnection fechada');
         }
         
         // Limpar vídeos
@@ -1239,7 +1311,7 @@ const CallManager = {
         this.elements.incomingModal?.classList.add('hidden');
         this.elements.outgoingModal?.classList.add('hidden');
         
-        // Resetar Variaveis
+        // Resetar Variáveis
         this.state.localStream = null;
         this.state.remoteStream = null;
         this.state.peerConnection = null;
@@ -1250,12 +1322,19 @@ const CallManager = {
         this.state.connectionState = 'idle';
         this.state.iceCandidateQueue = [];
         this.state.reconnectAttempts = 0;
+        this.state.isReconnecting = false;
+        this.state.consecutiveFailures = 0;
+        this.state.bytesReceived = 0;
+        this.state.lastBytesReceived = 0;
+        this.state.lastHeartbeat = null;
         this.pendingOffer = null;
         
         if (this.state.timerInterval) clearInterval(this.state.timerInterval);
         if (this.state.statsInterval) clearInterval(this.state.statsInterval);
         this.state.timerInterval = null;
         this.state.statsInterval = null;
+        
+        console.log('[CallManager] ✓ Chamada limpa');
     },
     
     // Compartilhar Tela
@@ -1323,12 +1402,31 @@ const CallManager = {
          }
     },
 
-    // Peer Connection Enterprise
+    // Peer Connection Enterprise - Máxima Estabilidade
     createPeerConnection() {
-        this.state.peerConnection = new RTCPeerConnection(this.config);
+        // Criar conexão com configurações otimizadas
+        const rtcConfig = {
+            iceServers: this.config.iceServers,
+            iceCandidatePoolSize: this.config.iceCandidatePoolSize,
+            iceTransportPolicy: this.config.iceTransportPolicy,
+            bundlePolicy: this.config.bundlePolicy,
+            rtcpMuxPolicy: this.config.rtcpMuxPolicy
+        };
+        
+        this.state.peerConnection = new RTCPeerConnection(rtcConfig);
         this.state.isCallActive = true;
         this.startTimer();
         this.startStats();
+        this.startHeartbeat();
+        this.startConnectionTimeout();
+        
+        console.log('[CallManager] 🔗 PeerConnection criada com config otimizada');
+        
+        // Forçar transceivers bidirecionais (sendrecv) para garantir fluxo de mídia
+        // Isso evita problemas onde áudio/vídeo funciona apenas em uma direção
+        this.state.peerConnection.addTransceiver('audio', { direction: 'sendrecv' });
+        this.state.peerConnection.addTransceiver('video', { direction: 'sendrecv' });
+        console.log('[CallManager] 📡 Transceivers bidirecionais configurados');
         
         // ICE candidate - serializar corretamente
         this.state.peerConnection.onicecandidate = (event) => {
@@ -1339,6 +1437,7 @@ const CallManager = {
                     sdpMid: event.candidate.sdpMid,
                     sdpMLineIndex: event.candidate.sdpMLineIndex
                 };
+                console.log('[CallManager] 🧊 ICE candidate gerado:', event.candidate.candidate.substring(0, 50) + '...');
                 this.sendSignal('ice-candidate', candidateData);
             }
         };
@@ -1346,75 +1445,209 @@ const CallManager = {
         // ICE gathering state
         this.state.peerConnection.onicegatheringstatechange = () => {
             const state = this.state.peerConnection.iceGatheringState;
-            console.log('[CallManager] ICE Gathering State:', state);
+            console.log('[CallManager] 🔍 ICE Gathering State:', state);
+            
+            if (state === 'complete') {
+                console.log('[CallManager] ✓ Todos os ICE candidates coletados');
+            }
         };
         
         // Remote track
         this.state.peerConnection.ontrack = (event) => {
-            console.log('[CallManager] Track remoto recebido');
+            console.log('[CallManager] 🎵 Track remoto recebido:', event.track.kind);
             this.state.remoteStream = event.streams[0];
+            
             if (this.elements.remoteVideo) {
                 this.elements.remoteVideo.srcObject = this.state.remoteStream;
             }
             if (this.elements.minimizedVideo) {
                 this.elements.minimizedVideo.srcObject = this.state.remoteStream;
             }
+            
+            // Limpar timeout de conexão quando receber track
+            this.clearConnectionTimeout();
         };
         
         // ICE connection state (mais confiável para detectar problemas)
         this.state.peerConnection.oniceconnectionstatechange = () => {
             const state = this.state.peerConnection.iceConnectionState;
-            console.log('[CallManager] ICE Connection State:', state);
+            console.log('[CallManager] 🌐 ICE Connection State:', state);
             
             if (state === 'connected' || state === 'completed') {
                 this.state.connectionState = 'connected';
                 this.state.reconnectAttempts = 0;
+                this.state.isReconnecting = false;
+                this.clearConnectionTimeout();
+                console.log('[CallManager] ✓✓✓ Conexão estabelecida com sucesso!');
+                this.showToast('Conectado!', 2000);
+                
             } else if (state === 'disconnected') {
                 this.state.connectionState = 'reconnecting';
-                this.showToast('Reconectando...');
-                // Tentar reconexão
-                this.attemptReconnect();
+                console.log('[CallManager] ⚠ Desconectado, tentando reconectar...');
+                
+                if (!this.state.isReconnecting) {
+                    this.showToast('Reconectando...');
+                    this.attemptReconnect();
+                }
+                
             } else if (state === 'failed') {
+                console.error('[CallManager] ✗ Conexão falhou!');
+                
                 if (this.state.reconnectAttempts < this.config.maxReconnectAttempts) {
                     this.attemptReconnect();
                 } else {
-                    this.showToast('Conexão perdida');
-                    this.endCall(true);
+                    this.showToast('Conexão perdida. Tente novamente.');
+                    setTimeout(() => this.endCall(true), 2000);
                 }
+                
+            } else if (state === 'checking') {
+                console.log('[CallManager] 🔄 Negociando conexão...');
             }
         };
         
         // Connection state (backup)
         this.state.peerConnection.onconnectionstatechange = () => {
             const state = this.state.peerConnection.connectionState;
-            console.log('[CallManager] Connection State:', state);
+            console.log('[CallManager] 🔌 Connection State:', state);
             
             if (state === 'connected') {
                 this.state.connectionState = 'connected';
+            } else if (state === 'failed') {
+                console.error('[CallManager] ✗ Connection State falhou');
             }
+        };
+        
+        // Signaling state (para debug)
+        this.state.peerConnection.onsignalingstatechange = () => {
+            const state = this.state.peerConnection.signalingState;
+            console.log('[CallManager] 📶 Signaling State:', state);
         };
     },
     
-    // Tentativa de reconexão
+    // Timeout para estabelecer conexão
+    startConnectionTimeout() {
+        this.clearConnectionTimeout();
+        this.state.connectionTimeoutId = setTimeout(() => {
+            if (this.state.connectionState !== 'connected') {
+                console.error('[CallManager] ⏱ Timeout ao estabelecer conexão');
+                this.showToast('Não foi possível conectar. Tentando novamente...');
+                this.attemptReconnect();
+            }
+        }, this.config.connectionTimeout);
+    },
+    
+    clearConnectionTimeout() {
+        if (this.state.connectionTimeoutId) {
+            clearTimeout(this.state.connectionTimeoutId);
+            this.state.connectionTimeoutId = null;
+        }
+    },
+    
+    // Heartbeat para detectar conexões "mortas"
+    startHeartbeat() {
+        this.stopHeartbeat();
+        
+        this.state.heartbeatInterval = setInterval(async () => {
+            if (!this.state.peerConnection || !this.state.isCallActive) return;
+            
+            try {
+                // Obter estatísticas de bytes recebidos
+                const stats = await this.state.peerConnection.getStats();
+                let currentBytesReceived = 0;
+                
+                stats.forEach(report => {
+                    if (report.type === 'inbound-rtp' && report.bytesReceived) {
+                        currentBytesReceived += report.bytesReceived;
+                    }
+                });
+                
+                // Se não recebeu nenhum byte novo, conexão pode estar morta
+                if (currentBytesReceived > 0) {
+                    if (currentBytesReceived === this.state.lastBytesReceived) {
+                        const timeSinceLastData = Date.now() - (this.state.lastHeartbeat || Date.now());
+                        
+                        if (timeSinceLastData > this.config.heartbeatTimeout) {
+                            console.warn('[CallManager] 💀 Conexão parece morta (sem dados)', timeSinceLastData + 'ms');
+                            this.showToast('Conexão instável, reconectando...');
+                            this.attemptReconnect();
+                        }
+                    } else {
+                        // Recebendo dados, atualizar heartbeat
+                        this.state.lastHeartbeat = Date.now();
+                        this.state.lastBytesReceived = currentBytesReceived;
+                    }
+                }
+                
+            } catch (e) {
+                console.error('[CallManager] Erro no heartbeat:', e);
+            }
+        }, this.config.heartbeatInterval);
+    },
+    
+    stopHeartbeat() {
+        if (this.state.heartbeatInterval) {
+            clearInterval(this.state.heartbeatInterval);
+            this.state.heartbeatInterval = null;
+        }
+    },
+    
+    // Tentativa de reconexão com Exponential Backoff
     async attemptReconnect() {
-        if (this.state.reconnectAttempts >= this.config.maxReconnectAttempts) {
-            console.log('[CallManager] Máximo de tentativas de reconexão atingido');
+        // Evitar múltiplas reconexões simultâneas
+        if (this.state.isReconnecting) {
+            console.log('[CallManager] ↻ Reconexão já em andamento, ignorando...');
             return;
         }
         
-        this.state.reconnectAttempts++;
-        console.log(`[CallManager] Tentativa de reconexão ${this.state.reconnectAttempts}/${this.config.maxReconnectAttempts}`);
+        if (this.state.reconnectAttempts >= this.config.maxReconnectAttempts) {
+            console.error('[CallManager] ✗✗✗ Máximo de tentativas de reconexão atingido');
+            this.showToast('Não foi possível restabelecer a conexão');
+            setTimeout(() => this.endCall(true), 2000);
+            return;
+        }
         
-        // ICE restart
+        this.state.isReconnecting = true;
+        this.state.reconnectAttempts++;
+        
+        // Exponential backoff
+        const delay = this.config.reconnectDelay * Math.pow(
+            this.config.reconnectBackoffMultiplier, 
+            this.state.reconnectAttempts - 1
+        );
+        
+        console.log(`[CallManager] 🔄 Tentativa de reconexão ${this.state.reconnectAttempts}/${this.config.maxReconnectAttempts} em ${delay}ms`);
+        
+        await this.sleep(delay);
+        
+        // ICE restart (apenas se for o initiator)
         if (this.state.isInitiator && this.state.peerConnection) {
             try {
+                console.log('[CallManager] 🔄 Iniciando ICE restart...');
                 const offer = await this.state.peerConnection.createOffer({ iceRestart: true });
                 await this.state.peerConnection.setLocalDescription(offer);
                 const offerData = { type: offer.type, sdp: btoa(offer.sdp) };
-                this.sendSignal('offer', offerData);
+                
+                const success = await this.sendSignal('offer', offerData);
+                
+                if (success) {
+                    console.log('[CallManager] ✓ ICE restart iniciado com sucesso');
+                } else {
+                    console.error('[CallManager] ✗ Falha ao enviar offer de ICE restart');
+                    this.state.isReconnecting = false;
+                    // Tentar novamente
+                    setTimeout(() => this.attemptReconnect(), 1000);
+                }
+                
             } catch (e) {
-                console.error('[CallManager] Erro ao tentar reconexão:', e);
+                console.error('[CallManager] ✗ Erro ao tentar ICE restart:', e);
+                this.state.isReconnecting = false;
+                // Tentar novamente
+                setTimeout(() => this.attemptReconnect(), 1000);
             }
+        } else {
+            // Se não é o initiator, apenas aguardar o outro lado
+            console.log('[CallManager] ⏳ Aguardando reconnect do initiator...');
+            this.state.isReconnecting = false;
         }
     },
     
