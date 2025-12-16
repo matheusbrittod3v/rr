@@ -377,24 +377,68 @@ function initializeChat() {
                 isConnected = false;
             });
             
-            // Listener para receber mensagens via whisper
-            privateChannel.listenForWhisper('client-chat-message', (data) => {
-                console.log('[Chat] Mensagem recebida via whisper:', data);
+            // Listener para mensagens enviadas via broadcasting
+            publicChannel.listen('.message.sent', (data) => {
+                console.log('[Chat] 📩 Mensagem recebida via broadcasting:', data);
                 console.log('[Chat] Comparando sender_type:', {
                     received: data.sender_type,
                     current: CHAT_CONFIG.senderType,
-                    match: data.sender_type === CHAT_CONFIG.senderType
+                    isOwn: data.sender_type === CHAT_CONFIG.senderType
                 });
                 
-                // Ignorar mensagens do próprio usuário
+                // Ignorar mensagens do próprio usuário (já adicionadas localmente)
                 if (data.sender_type === CHAT_CONFIG.senderType) {
-                    console.log('[Chat] Mensagem ignorada (próprio usuário)');
+                    console.log('[Chat] ⏭️ Mensagem ignorada (próprio usuário)');
                     return;
                 }
                 
                 // Adicionar mensagem ao chat
-                console.log('[Chat] Adicionando mensagem ao chat');
-                addMessageToChat(data.message, data.sender_type);
+                console.log('[Chat] ✅ Adicionando mensagem recebida ao chat');
+                addMessageToChat(data);
+            });
+            
+            // Listener para indicador de digitação
+            publicChannel.listen('.user.typing', (data) => {
+                console.log('[Chat] ⌨️ Indicador de digitação:', data);
+                
+                // Ignorar próprio indicador
+                if (data.user_type === CHAT_CONFIG.senderType) {
+                    return;
+                }
+                
+                // Mostrar/ocultar indicador
+                const otherUserType = CHAT_CONFIG.senderType === 'client' ? 'Prestador' : 'Cliente';
+                const typingIndicator = document.getElementById('typing-indicator');
+                
+                if (data.is_typing) {
+                    if (!typingIndicator) {
+                        const indicator = document.createElement('div');
+                        indicator.id = 'typing-indicator';
+                        indicator.className = 'text-sm text-gray-500 italic px-6 py-2';
+                        indicator.textContent = `${otherUserType} está digitando...`;
+                        elements.chatMessages.appendChild(indicator);
+                        scrollToBottom();
+                    }
+                } else {
+                    if (typingIndicator) {
+                        typingIndicator.remove();
+                    }
+                }
+            });
+            
+            // Listener para usuário que entrou
+            publicChannel.listen('.user.joined', (data) => {
+                console.log('[Chat] 👋 Usuário entrou:', data);
+                
+                // Atualizar status do outro usuário
+                const otherUserStatus = document.getElementById('other-user-status');
+                if (otherUserStatus && data.user_type !== CHAT_CONFIG.senderType) {
+                    const statusDot = otherUserStatus.querySelector('.w-2.h-2');
+                    if (statusDot) {
+                        statusDot.classList.remove('bg-gray-400');
+                        statusDot.classList.add('bg-green-400');
+                    }
+                }
             });
             
             // Listener para status de conexão WebSocket
@@ -420,7 +464,7 @@ function initializeChat() {
                 });
             }
             
-            console.log('[Chat] ✅ Chat inicializado! Aguardando subscrição do canal...');
+            console.log('[Chat] ✅ Chat inicializado com sucesso!');
             
         } catch (error) {
             console.error('[Chat] ❌ Erro ao inicializar chat:', error);
