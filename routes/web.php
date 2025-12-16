@@ -3,7 +3,6 @@
 use App\Http\Controllers\Api\DhruController;
 use App\Http\Controllers\Api\MercadoPagoController;
 use App\Http\Controllers\Api\NotificationController;
-use App\Http\Controllers\ChatController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RegistrationLinkController;

@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\WhatsWebhookController;
 use App\Http\Controllers\OrcamentoStatusController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\Api\ChatMessageController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -19,3 +20,10 @@ Route::get('/orcamentos/{orcamento}/status', [OrcamentoStatusController::class, 
 // Payment endpoints
 Route::post('/payments/orcamento-pix', [PaymentController::class, 'generateOrcamentoPixPayment']);
 Route::get('/payments/{payment}/status', [PaymentController::class, 'getPaymentStatus']);
+
+// Chat endpoints - autenticação via sessão de chat
+Route::prefix('chat/{roomCode}')->group(function () {
+    Route::post('/messages', [ChatMessageController::class, 'sendMessage']);
+    Route::get('/messages', [ChatMessageController::class, 'getMessages']);
+    Route::post('/typing', [ChatMessageController::class, 'sendTypingIndicator']);
+});

@@ -164,15 +164,16 @@
     $chatConfig = [
         'roomCode' => $chatRoom->room_code,
         'senderType' => session('chat_user_role', 'client'),
+        'apiBaseUrl' => url('/api'),
     ];
-    
 @endphp
 
 const CHAT_CONFIG = @json($chatConfig);
 
 // ========== CONFIGURAÇÃO DO CHAT ==========
-let privateChannel = null;
+let publicChannel = null;
 let isConnected = false;
+let typingTimeout = null;
 
 // Elementos DOM
 const elements = {
@@ -190,7 +191,41 @@ elements.messageInput?.addEventListener('input', function() {
     this.style.height = 'auto';
     this.style.height = (this.scrollHeight) + 'px';
     elements.charCount.textContent = this.value.length + '/1000';
+    
+    // Enviar indicador de digitação
+    handleTypingIndicator();
 });
+
+// Throttle para indicador de digitação
+function handleTypingIndicator() {
+    if (typingTimeout) {
+        clearTimeout(typingTimeout);
+    }
+    
+    // Enviar que está digitando
+    sendTypingIndicator(true);
+    
+    // Após 2 segundos sem digitar, enviar que parou
+    typingTimeout = setTimeout(() => {
+        sendTypingIndicator(false);
+    }, 2000);
+}
+
+// Enviar indicador de digitação
+async function sendTypingIndicator(isTyping) {
+    try {
+        await fetch(`${CHAT_CONFIG.apiBaseUrl}/chat/${CHAT_CONFIG.roomCode}/typing`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            },
+            body: JSON.stringify({ is_typing: isTyping }),
+        });
+    } catch (error) {
+        console.error('[Chat] Erro ao enviar indicador de digitação:', error);
+    }
+}
 
 // Scroll para o final
 function scrollToBottom() {
@@ -198,12 +233,12 @@ function scrollToBottom() {
 }
 
 // Adicionar mensagem ao chat
-function addMessageToChat(message, senderType) {
+function addMessageToChat(messageData) {
     const messageDiv = document.createElement('div');
     messageDiv.className = 'mb-4 animate-fade-in';
+    messageDiv.setAttribute('data-message-id', messageData.id);
     
-    const isClient = senderType === 'client';
-    const isCurrentUser = senderType === CHAT_CONFIG.senderType;
+    const isClient = messageData.sender_type === 'client';
     
     // Escape HTML para prevenir XSS
     function escapeHtml(text) {
@@ -212,8 +247,32 @@ function addMessageToChat(message, senderType) {
         return div.innerHTML;
     }
     
-    const safeMessage = message ? escapeHtml(message) : '';
-    const timeString = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const safeMessage = messageData.message ? escapeHtml(messageData.message) : '';
+    const timeString = messageData.formatted_time || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    
+    let fileHtml = '';
+    if (messageData.file_path) {
+        const fileUrl = `/storage/${messageData.file_path}`;
+        if (messageData.file_type === 'image') {
+            fileHtml = `
+                <div class="mt-2">
+                    <img src="${escapeHtml(fileUrl)}" alt="Imagem anexada" class="max-w-xs rounded-lg cursor-pointer" loading="lazy" onclick="window.open('${escapeHtml(fileUrl)}', '_blank')">
+                </div>
+            `;
+        } else {
+            const extension = messageData.file_path.split('.').pop().toUpperCase();
+            fileHtml = `
+                <div class="mt-2 p-2 bg-black/10 rounded-lg text-sm flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                    <a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener noreferrer" class="hover:underline">
+                        Ver anexo (${extension})
+                    </a>
+                </div>
+            `;
+        }
+    }
     
     messageDiv.innerHTML = `
         <div class="flex ${isClient ? 'justify-end' : 'justify-start'}">
@@ -224,6 +283,7 @@ function addMessageToChat(message, senderType) {
                         'bg-white text-gray-800 border border-gray-200 rounded-bl-sm'
                     }">
                         ${safeMessage ? `<p class="text-sm break-words">${safeMessage}</p>` : ''}
+                        ${fileHtml}
                         <p class="text-xs mt-1.5 ${isClient ? 'text-blue-200' : 'text-gray-500'}">
                             ${escapeHtml(timeString)}
                         </p>
@@ -237,7 +297,7 @@ function addMessageToChat(message, senderType) {
     scrollToBottom();
 }
 
-// ========== WEBSOCKET - LARAVEL ECHO + REVERB ==========
+// ========== WEBSOCKET - LARAVEL ECHO + REVERB (CANAL PÚBLICO) ==========
 
 function initializeChat() {
     // Aguardar Echo estar disponível
@@ -247,7 +307,7 @@ function initializeChat() {
         function checkEcho() {
             attempts++;
             
-            if (window.Echo && typeof window.Echo.private === 'function') {
+            if (window.Echo && typeof window.Echo.channel === 'function') {
                 console.log('[Chat] ✅ Echo encontrado!');
                 callback();
             } else if (attempts >= maxAttempts) {
@@ -263,7 +323,7 @@ function initializeChat() {
     
     waitForEcho(function() {
         const roomCode = CHAT_CONFIG.roomCode;
-        // IMPORTANTE: Laravel adiciona automaticamente o prefixo "private-", então não inclua
+        // IMPORTANTE: Usar canal público agora
         const channelName = `chat-room.${roomCode}`;
         
         console.log('[Chat] Conectando ao canal:', channelName);
@@ -274,12 +334,13 @@ function initializeChat() {
         });
         
         try {
-            // Criar canal privado (Laravel adiciona automaticamente o prefixo "private-")
-            privateChannel = window.Echo.private(channelName);
+            // Criar canal público (sem prefixo "private-")
+            publicChannel = window.Echo.channel(channelName);
+            privateChannel = publicChannel; // Manter a variável para compatibilidade
             
-            // Listener para quando o canal é autorizado e subscrito
+            // Listener para quando o canal é subscrito
             privateChannel.subscribed(() => {
-                console.log('[Chat] ✅ Canal autorizado e subscrito com sucesso!');
+                console.log('[Chat] ✅ Canal subscrito com sucesso!');
                 isConnected = true;
                 
                 // Atualizar indicador de status
@@ -290,9 +351,9 @@ function initializeChat() {
                 }
             });
             
-            // Listener para erro de autorização
+            // Listener para erro de subscrição
             privateChannel.error((error) => {
-                console.error('[Chat] ❌ Erro ao autorizar canal:', error);
+                console.error('[Chat] ❌ Erro ao subscrever canal:', error);
                 console.error('[Chat] Detalhes do erro:', {
                     status: error.status,
                     error: error.error,
@@ -312,15 +373,7 @@ function initializeChat() {
                     statusIndicator.classList.add('bg-red-400');
                 }
                 
-                // Mensagem de erro mais específica
-                let errorMessage = 'Erro ao autorizar acesso ao chat.';
-                if (error.status === 403) {
-                    errorMessage = 'Acesso negado (403). Verifique se você está autenticado corretamente. Tente fazer login novamente.';
-                } else if (error.status === 401) {
-                    errorMessage = 'Não autorizado (401). Sua sessão pode ter expirado. Tente fazer login novamente.';
-                }
-                
-                alert(errorMessage);
+                alert('Erro ao conectar ao chat. Recarregue a página.');
                 isConnected = false;
             });
             
@@ -367,7 +420,7 @@ function initializeChat() {
                 });
             }
             
-            console.log('[Chat] ✅ Chat inicializado! Aguardando autorização do canal...');
+            console.log('[Chat] ✅ Chat inicializado! Aguardando subscrição do canal...');
             
         } catch (error) {
             console.error('[Chat] ❌ Erro ao inicializar chat:', error);
@@ -377,7 +430,7 @@ function initializeChat() {
     });
 }
 
-// ========== ENVIAR MENSAGEM ==========
+// ========== ENVIAR MENSAGEM VIA API ==========
 
 async function sendMessage() {
     const message = elements.messageInput.value.trim();
@@ -386,15 +439,9 @@ async function sendMessage() {
         return;
     }
     
-    if (!privateChannel) {
-        console.error('[Chat] Canal privado não disponível');
-        alert('Não conectado ao chat. Aguarde a conexão...');
-        return;
-    }
-    
-    // Verificar se o canal está subscrito
     if (!isConnected) {
-        console.warn('[Chat] Canal ainda não está autorizado. Tentando enviar mesmo assim...');
+        alert('Aguarde a conexão com o chat...');
+        return;
     }
     
     // Desabilitar botão durante envio
@@ -402,32 +449,43 @@ async function sendMessage() {
     elements.sendButton.classList.add('opacity-50', 'cursor-not-allowed');
     
     try {
-        const messageData = {
-            room_code: CHAT_CONFIG.roomCode,
-            message: message,
-            sender_type: CHAT_CONFIG.senderType,
-            timestamp: Date.now(),
-        };
+        // Enviar via API REST
+        const response = await fetch(`${CHAT_CONFIG.apiBaseUrl}/chat/${CHAT_CONFIG.roomCode}/messages`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            },
+            body: JSON.stringify({
+                message: message,
+            }),
+        });
         
-        console.log('[Chat] Enviando mensagem via whisper:', messageData);
+        const result = await response.json();
         
-        // Enviar mensagem via whisper (client event)
-        privateChannel.whisper('client-chat-message', messageData);
+        if (!result.success) {
+            throw new Error(result.message || 'Erro ao enviar mensagem');
+        }
         
-        console.log('[Chat] ✅ Mensagem enviada via whisper');
+        console.log('[Chat] ✅ Mensagem enviada via API:', result.data);
         
         // Adicionar mensagem localmente (otimista)
-        addMessageToChat(message, CHAT_CONFIG.senderType);
+        addMessageToChat(result.data);
         
         // Limpar input
         elements.messageInput.value = '';
         elements.messageInput.style.height = 'auto';
         elements.charCount.textContent = '0/1000';
         
+        // Parar indicador de digitação
+        if (typingTimeout) {
+            clearTimeout(typingTimeout);
+        }
+        sendTypingIndicator(false);
+        
     } catch (error) {
         console.error('[Chat] ❌ Erro ao enviar mensagem:', error);
-        console.error('[Chat] Stack trace:', error.stack);
-        alert('Erro ao enviar mensagem. Tente novamente.');
+        alert('Erro ao enviar mensagem: ' + error.message);
     } finally {
         // Reabilitar botão
         elements.sendButton.disabled = false;

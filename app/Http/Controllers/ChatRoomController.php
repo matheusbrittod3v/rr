@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ChatRoom;
 use App\Services\ChatService;
+use App\Events\ChatUserJoined;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Exception;
@@ -119,11 +120,16 @@ class ChatRoomController extends Controller
             ->with('messages')
             ->firstOrFail();
 
+        $userRole = session('chat_user_role', 'client');
+
         Log::info('ChatRoomController: Sala de chat carregada', [
             'roomCode' => $roomCode,
             'session_id' => session()->getId(),
-            'role' => session('chat_user_role'),
+            'role' => $userRole,
         ]);
+
+        // Disparar evento de usuário que entrou na sala
+        broadcast(new ChatUserJoined($roomCode, $userRole));
 
         return view('chat.room', [
             'chatRoom' => $chatRoom,
