@@ -1345,24 +1345,6 @@ const CallManager = {
     },
     
     async startCall(type) {
-        // Verificar se dispositivos estão disponíveis
-        try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const hasAudio = devices.some(d => d.kind === 'audioinput');
-            const hasVideo = devices.some(d => d.kind === 'videoinput');
-            
-            if (!hasAudio) {
-                this.showToast('Nenhum microfone encontrado');
-                return;
-            }
-            if (type === 'video' && !hasVideo) {
-                this.showToast('Nenhuma câmera encontrada');
-                return;
-            }
-        } catch (e) {
-            console.warn('[CallManager] Erro ao verificar dispositivos:', e);
-        }
-        
         this.state.callType = type;
         this.state.isInitiator = true;
         this.state.connectionState = 'calling';
@@ -1374,36 +1356,64 @@ const CallManager = {
         this.startCallTimeout();
         
         try {
-            const constraints = {
-                audio: { echoCancellation: true, noiseSuppression: true },
-                video: type === 'video' ? { 
-                    facingMode: 'user',
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                } : false
-            };
-            this.state.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            this.elements.localVideo.srcObject = this.state.localStream;
+            // Tentar obter mídia, mas continuar se falhar
+            try {
+                const constraints = {
+                    audio: { echoCancellation: true, noiseSuppression: true },
+                    video: type === 'video' ? { 
+                        facingMode: 'user',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } : false
+                };
+                this.state.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                this.elements.localVideo.srcObject = this.state.localStream;
+                
+                console.log('[CallManager] 📹 Stream local obtido:', {
+                    audio: this.state.localStream.getAudioTracks().length,
+                    video: this.state.localStream.getVideoTracks().length
+                });
+            } catch (mediaError) {
+                console.warn('[CallManager] Mídia não obtida:', mediaError);
+                this.showToast('Sem acesso a câmera/microfone. Modo apenas recepção.');
+                this.state.localStream = null;
+            }
             
-            console.log('[CallManager] 📹 Stream local obtido:', {
-                audio: this.state.localStream.getAudioTracks().length,
-                video: this.state.localStream.getVideoTracks().length
-            });
-            
-            // Iniciar Peer
+            // Iniciar Peer (mesmo sem mídia local)
             this.createPeerConnection();
             
-            // Adicionar tracks ao PeerConnection
-            this.state.localStream.getTracks().forEach(track => {
-                const sender = this.state.peerConnection.addTrack(track, this.state.localStream);
-                console.log('[CallManager] ➕ Track local adicionado:', {
-                    kind: track.kind,
-                    enabled: track.enabled,
-                    readyState: track.readyState
-                });
-            });
+            // Adicionar tracks se existirem
+            let hasAudio = false;
+            let hasVideo = false;
             
-            const offer = await this.state.peerConnection.createOffer();
+            if (this.state.localStream) {
+                this.state.localStream.getTracks().forEach(track => {
+                    this.state.peerConnection.addTrack(track, this.state.localStream);
+                    if (track.kind === 'audio') hasAudio = true;
+                    if (track.kind === 'video') hasVideo = true;
+                    
+                    console.log('[CallManager] ➕ Track local adicionado:', {
+                        kind: track.kind,
+                        enabled: track.enabled
+                    });
+                });
+            }
+            
+            // Se não tiver tracks locais, garantir que pedimos para RECEBER via Transceiver
+            if (!hasAudio) {
+                console.log('[CallManager] Adicionando transceiver áudio recvonly');
+                this.state.peerConnection.addTransceiver('audio', { direction: 'recvonly' });
+            }
+            if (!hasVideo && type === 'video') {
+                console.log('[CallManager] Adicionando transceiver vídeo recvonly');
+                this.state.peerConnection.addTransceiver('video', { direction: 'recvonly' });
+            }
+            
+            // Criar Offer com intenção explícita de receber
+            const offer = await this.state.peerConnection.createOffer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: type === 'video'
+            });
             await this.state.peerConnection.setLocalDescription(offer);
             
             console.log('[CallManager] 📤 Offer criado com', 
@@ -1422,17 +1432,9 @@ const CallManager = {
             console.log('[CallManager] ✓ Offer enviado (Base64)');
             
         } catch (error) {
-            console.error('[CallManager] Erro ao iniciar chamada:', error);
+            console.error('[CallManager] Erro fatal ao iniciar chamada:', error);
             this.clearCallTimeout();
-            
-            // Mensagens de erro específicas
-            if (error.name === 'NotAllowedError') {
-                this.showToast('Permissão de mídia negada. Verifique as configurações do navegador.');
-            } else if (error.name === 'NotFoundError') {
-                this.showToast('Dispositivo de mídia não encontrado.');
-            } else {
-                this.showToast('Erro ao acessar dispositivos.');
-            }
+            this.showToast('Erro ao iniciar chamada.');
             this.resetCall();
         }
     },
@@ -1449,22 +1451,29 @@ const CallManager = {
         this.showCallInterface(); 
         
         try {
-            const constraints = {
-                audio: { echoCancellation: true, noiseSuppression: true },
-                video: this.state.callType === 'video' ? { 
-                    facingMode: 'user',
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                } : false
-            };
-            
-            this.state.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            this.elements.localVideo.srcObject = this.state.localStream;
-            
-            console.log('[CallManager] 📹 Stream local obtido (accept):', {
-                audio: this.state.localStream.getAudioTracks().length,
-                video: this.state.localStream.getVideoTracks().length
-            });
+            // Tentar obter mídia, continuar se falhar
+            try {
+                const constraints = {
+                    audio: { echoCancellation: true, noiseSuppression: true },
+                    video: this.state.callType === 'video' ? { 
+                        facingMode: 'user',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } : false
+                };
+                
+                this.state.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                this.elements.localVideo.srcObject = this.state.localStream;
+                
+                console.log('[CallManager] 📹 Stream local obtido (accept):', {
+                    audio: this.state.localStream.getAudioTracks().length,
+                    video: this.state.localStream.getVideoTracks().length
+                });
+            } catch (mediaError) {
+                console.warn('[CallManager] Mídia não obtida na aceitação:', mediaError);
+                this.showToast('Sem áudio/vídeo. Modo apenas recepção.');
+                this.state.localStream = null;
+            }
             
             // Se já tem peer (de tentativas anteriores), fecha
             if (this.state.peerConnection) {
@@ -1475,15 +1484,30 @@ const CallManager = {
             this.createPeerConnection();
             console.log('[CallManager] ✓ PeerConnection criado');
             
-            // Adicionar tracks ao PeerConnection
-            this.state.localStream.getTracks().forEach(track => {
-                this.state.peerConnection.addTrack(track, this.state.localStream);
-                console.log('[CallManager] ➕ Track local adicionado:', {
-                    kind: track.kind,
-                    enabled: track.enabled,
-                    readyState: track.readyState
+            // Adicionar tracks se existirem
+            let hasAudio = false;
+            let hasVideo = false;
+
+            if (this.state.localStream) {
+                this.state.localStream.getTracks().forEach(track => {
+                    this.state.peerConnection.addTrack(track, this.state.localStream);
+                    if(track.kind === 'audio') hasAudio = true;
+                    if(track.kind === 'video') hasVideo = true;
+                    
+                    console.log('[CallManager] ➕ Track local adicionado:', {
+                        kind: track.kind,
+                        enabled: track.enabled
+                    });
                 });
-            });
+            }
+            
+            // Adicionar transceivers explicitamente se não tiver tracks locais
+            if (!hasAudio) {
+                 this.state.peerConnection.addTransceiver('audio', { direction: 'recvonly' });
+            }
+            if (!hasVideo && this.state.callType === 'video') {
+                 this.state.peerConnection.addTransceiver('video', { direction: 'recvonly' });
+            }
             
             // Se tem offer guardado, processar agora
             if (this.pendingOffer) {
@@ -1496,8 +1520,8 @@ const CallManager = {
             
         } catch (error) {
             console.error('[CallManager] Erro ao aceitar:', error);
-            this.showToast('Erro ao acessar dispositivos');
-            this.endCall(false);
+            this.showToast('Erro ao conectar.');
+            // Não encerrar, pois o remoto pode tentar reconectar ou enviar offer
         }
     },
     
