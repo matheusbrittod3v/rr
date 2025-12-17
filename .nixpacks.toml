@@ -52,7 +52,8 @@ cmds = [
   "php artisan config:cache",
   "php artisan route:cache",
   "php artisan view:cache",
-  "echo '=== Cache do Laravel gerado ==='"
+  "php artisan storage:link",
+  "echo '=== Cache do Laravel gerado e Storage Link criado ==='"
 ]
 
 [start]
