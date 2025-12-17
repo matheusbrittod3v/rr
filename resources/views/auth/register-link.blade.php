@@ -218,5 +218,7 @@
             </div>
         </div>
     </div>
+    <!-- Phone Mask Script -->
+    @include('filament.hooks.phone-mask')
 </body>
 </html>

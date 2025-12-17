@@ -24,6 +24,7 @@ class UserForm
                 TextInput::make('numero')
                     ->label('Phone Number')
                     ->tel()
+                    ->extraInputAttributes(['class' => 'phone-mask-input'])
                     ->nullable(),
                 Toggle::make('is_provider')
                     ->label('Este usuário é um prestador de serviço?')

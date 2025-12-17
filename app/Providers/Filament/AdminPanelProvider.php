@@ -72,6 +72,10 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 FilamentAuthenticate::class,
-            ]);
+            ])
+            ->renderHook(
+                'panels::body.end',
+                fn () => view('filament.hooks.phone-mask'),
+            );
     }
 }
