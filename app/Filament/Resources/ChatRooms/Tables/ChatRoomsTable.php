@@ -149,9 +149,6 @@ class ChatRoomsTable
                     }),
             ])
             ->recordActions([
-                ViewAction::make()
-                    ->label('Ver'),
-                    
                 Action::make('open_chat')
                     ->label('Abrir Chat')
                     ->icon('heroicon-o-arrow-top-right-on-square')
@@ -163,6 +160,7 @@ class ChatRoomsTable
                 // Sem ações de criação/exclusão
             ])
             ->defaultSort('created_at', 'desc')
-            ->poll('30s'); // Auto-refresh a cada 30 segundos
+            ->poll('30s') // Auto-refresh a cada 30 segundos
+            ->recordUrl(null);
     }
 }

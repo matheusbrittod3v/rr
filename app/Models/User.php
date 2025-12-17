@@ -36,6 +36,18 @@ class User extends Authenticatable
     ];
 
     /**
+     * The "booted" method of the model.
+     */
+    protected static function booted(): void
+    {
+        static::updated(function (User $user) {
+            if ($user->wasChanged('is_provider') && !$user->is_provider) {
+                \App\Jobs\RemoveProviderFromQueue::dispatch($user->id);
+            }
+        });
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
