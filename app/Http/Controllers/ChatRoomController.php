@@ -135,4 +135,33 @@ class ChatRoomController extends Controller
             'chatRoom' => $chatRoom,
         ]);
     }
+
+    /**
+     * Realiza o logout da sala de chat
+     */
+    public function logout(Request $request, string $roomCode)
+    {
+        try {
+            // Opcional: Registrar saída se necessário
+            Log::info('ChatRoomController: Usuário saiu da sala', [
+                'roomCode' => $roomCode,
+                'session_id' => session()->getId(),
+            ]);
+
+            // Limpar dados específicos da sessão do chat
+            // Mantendo a sessão global para não deslogar do sistema administrativo caso esteja logado
+            $request->session()->forget([
+                'chat_user_role',
+                'authenticated_chat_room'
+            ]);
+
+            return redirect('/');
+        } catch (\Exception $e) {
+            Log::error('ChatRoomController: Erro ao sair da sala', [
+                'roomCode' => $roomCode,
+                'error' => $e->getMessage()
+            ]);
+            return redirect('/');
+        }
+    }
 }

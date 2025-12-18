@@ -123,6 +123,12 @@ class SendProviderPaymentNotificationJob implements ShouldQueue
             
             // Send notification to provider's phone number only
             if ($providerUser->numero) {
+                // Sanitize phone number
+                $providerPhone = preg_replace('/\D/', '', $providerUser->numero);
+                if (strlen($providerPhone) >= 10 && strlen($providerPhone) <= 11) {
+                    $providerPhone = '55' . $providerPhone;
+                }
+
                 $providerMessage = "💬 *Nova Sala de Chat Criada!*\n\n";
                 $providerMessage .= "Um novo cliente pagou pelo serviço e a sala de chat foi criada.\n\n";
                 $providerMessage .= "🔗 Link de acesso (Prestador): " . route('chat.login', $chatRoom->room_code) . "\n";
@@ -133,6 +139,8 @@ class SendProviderPaymentNotificationJob implements ShouldQueue
                     'payment_id' => $payment->id,
                     'chat_room_id' => $chatRoom->id,
                     'provider_user_id' => $providerUser->id,
+                    'provider_original_phone' => $providerUser->numero,
+                    'provider_sanitized_phone' => $providerPhone,
                     'message_length' => strlen($providerMessage),
                     'has_numero' => !empty($providerUser->numero)
                 ]);
@@ -148,7 +156,7 @@ class SendProviderPaymentNotificationJob implements ShouldQueue
                     
                     $notificationResult = $notificationService->sendWhatsAppNotification(
                         $configOwnerUserId,
-                        $providerUser->numero,
+                        $providerPhone,
                         $providerMessage,
                         null,
                         $this->idempotencyKey

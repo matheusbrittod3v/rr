@@ -42,11 +42,19 @@ class RegistrationLinkController extends Controller
             'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
+        // Sanitize phone number (remove non-digits)
+        $numero = preg_replace('/\D/', '', $validated['numero']);
+        
+        // Ensure Brazil country code logic
+        if (strlen($numero) >= 10 && strlen($numero) <= 11) {
+            $numero = '55' . $numero;
+        }
+
         // Create user
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
-            'numero' => $validated['numero'],
+            'numero' => $numero,
             'password' => Hash::make($validated['password']),
             'is_provider' => $link->is_provider,
         ]);

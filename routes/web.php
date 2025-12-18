@@ -115,6 +115,10 @@ Route::prefix('chat')->group(function () {
         ->middleware('chat.session')
         ->name('chat.room');
 
+    // Logout da sala
+    Route::post('/{roomCode}/logout', [\App\Http\Controllers\ChatRoomController::class, 'logout'])
+        ->name('chat.logout');
+
     // API de chat - rotas que precisam de sessão (movidas de api.php para web.php)
     Route::prefix('/{roomCode}')->group(function () {
         Route::post('/messages', [ChatMessageController::class, 'sendMessage'])->name('chat.api.sendMessage');
