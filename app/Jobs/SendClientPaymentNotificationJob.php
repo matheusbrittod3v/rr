@@ -99,7 +99,9 @@ class SendClientPaymentNotificationJob implements ShouldQueue
                     $payment->email,
                     $message,
                     'Pagamento Aprovado - FRP Rent',
-                    $this->idempotencyKey
+                    $this->idempotencyKey,
+                    'emails.payment_confirmed_client', // Email View
+                    ['payment' => $payment, 'chatRoom' => $chatRoom] // View Data
                 );
                 
                 Log::info('Client notification result', [

@@ -131,6 +131,29 @@ class SendProviderPaymentNotificationJob implements ShouldQueue
 
                 $providerMessage = "💬 *Nova Sala de Chat Criada!*\n\n";
                 $providerMessage .= "Um novo cliente pagou pelo serviço e a sala de chat foi criada.\n\n";
+
+                // Add Service Details
+                if ($orcamento->service) {
+                    $marcaName = $orcamento->service->marca ? $orcamento->service->marca->nome : 'N/A';
+                    $serviceName = $orcamento->service->nome_servico;
+                    
+                    $providerMessage .= "📱 *Detalhes do Serviço:*\n";
+                    $providerMessage .= "🔹 *Marca:* {$marcaName}\n";
+                    $providerMessage .= "🔹 *Serviço:* {$serviceName}\n";
+
+                    // Add Custom Fields (informacoes_adicionais)
+                    if (!empty($orcamento->informacoes_adicionais) && is_array($orcamento->informacoes_adicionais)) {
+                        foreach ($orcamento->informacoes_adicionais as $key => $value) {
+                            $label = ucfirst(str_replace('_', ' ', $key));
+                            // Check if value is a string or number basically representable as string
+                            if (is_string($value) || is_numeric($value)) {
+                                $providerMessage .= "🔹 *{$label}:* {$value}\n";
+                            }
+                        }
+                    }
+                    $providerMessage .= "\n";
+                }
+
                 $providerMessage .= "🔗 Link de acesso (Prestador): " . route('chat.login', $chatRoom->room_code) . "\n";
                 $providerMessage .= "🔒 Senha do Prestador: {$chatRoom->provider_password}\n\n";
                 $providerMessage .= "O cliente está aguardando para iniciar a comunicação.";
@@ -154,13 +177,33 @@ class SendProviderPaymentNotificationJob implements ShouldQueue
                 if ($whatsappInstance) {
                     $configOwnerUserId = (int) $whatsappInstance->user_id;
                     
-                    $notificationResult = $notificationService->sendWhatsAppNotification(
+                    // Send WhatsApp Notification
+                    $whatsappResult = $notificationService->sendWhatsAppNotification(
                         $configOwnerUserId,
                         $providerPhone,
                         $providerMessage,
                         null,
-                        $this->idempotencyKey
+                        $this->idempotencyKey . '_whatsapp'
                     );
+
+                    // Send Email Notification
+                    $emailResult = ['success' => false];
+                    if ($providerUser->email) {
+                        $emailResult = $notificationService->sendEmailNotification(
+                            $configOwnerUserId,
+                            $providerUser->email,
+                            'Novo Serviço Confirmado - FRP Rent',
+                            'emails.payment_confirmed_provider', // View
+                            $this->idempotencyKey . '_email',
+                            ['orcamento' => $orcamento, 'chatRoom' => $chatRoom] // Data
+                        );
+                    }
+
+                    $notificationResult = [
+                        'whatsapp' => $whatsappResult,
+                        'email' => $emailResult,
+                        'success' => ($whatsappResult['success'] ?? false) || ($emailResult['success'] ?? false)
+                    ];
                     
                     Log::info('Provider WhatsApp notification result', [
                         'payment_id' => $payment->id,

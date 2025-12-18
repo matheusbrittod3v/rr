@@ -34,7 +34,8 @@ class UserForm
                     ->password()
                     ->revealable()
                     ->dehydrated(fn ($state) => filled($state))
-                    ->required(fn (string $context): bool => $context === 'create'),
+                    ->required(fn (string $context): bool => $context === 'create')
+                    ->helperText(fn (string $operation): ?string => $operation === 'edit' ? 'Deixe em branco para manter a senha atual. Digite apenas se desejar alterá-la.' : null),
                 Select::make('roles')
                     ->relationship('roles', 'name')
                     ->multiple()

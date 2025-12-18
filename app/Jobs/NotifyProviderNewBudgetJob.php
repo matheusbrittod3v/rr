@@ -138,7 +138,41 @@ class NotifyProviderNewBudgetJob implements ShouldQueue
                 'idempotency_key' => $this->idempotencyKey
             ]);
             
-            $result = $notificationService->sendWhatsAppNotification($configOwnerUserId, $cleanPhone, $message, null, $this->idempotencyKey);
+            // Send WhatsApp
+            $whatsappResult = $notificationService->sendWhatsAppNotification($configOwnerUserId, $cleanPhone, $message, null, $this->idempotencyKey . '_whatsapp');
+            
+            // Send Email
+            $emailResult = ['success' => false];
+            if ($prestador->email) {
+                // Prepare attributes for view
+                $viewData = [
+                    'uniqueId' => $uniqueId,
+                    'orcamento' => $orcamento,
+                    'informacoesAdicionais' => $informacoesAdicionais
+                ];
+
+                Log::info('Sending Email notification', [
+                    'budget_queue_id' => $this->budgetQueueId,
+                    'provider_id' => $prestador->id,
+                    'email' => $prestador->email
+                ]);
+
+                $emailResult = $notificationService->sendEmailNotification(
+                    $configOwnerUserId,
+                    $prestador->email,
+                    'Novo Orçamento Disponível - FRP Rent',
+                    'emails.new_budget_provider',
+                    $this->idempotencyKey . '_email',
+                    $viewData
+                );
+            }
+
+            // Combine results for consistent logging
+            $result = [
+                'whatsapp' => $whatsappResult,
+                'email' => $emailResult,
+                'success' => ($whatsappResult['success'] ?? false) || ($emailResult['success'] ?? false)
+            ];
             
             Log::info('Received notification result', [
                 'budget_queue_id' => $this->budgetQueueId,

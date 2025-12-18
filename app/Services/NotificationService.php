@@ -144,11 +144,12 @@ class NotificationService
      * @param int $userId
      * @param string $emailAddress
      * @param string $subject
-     * @param string $message
+     * @param string $message content or view name
      * @param string|null $idempotencyKey Optional idempotency key to prevent duplicate emails
+     * @param array $viewData Optional data for building the view
      * @return array
      */
-    public function sendEmailNotification(int $userId, string $emailAddress, string $subject, string $message, string $idempotencyKey = null): array
+    public function sendEmailNotification(int $userId, string $emailAddress, string $subject, string $message, string $idempotencyKey = null, array $viewData = []): array
     {
         // Generate idempotency key if not provided
         if (!$idempotencyKey) {
@@ -196,12 +197,22 @@ class NotificationService
                 'mail.from.name' => $emailConfig->from_name,
             ]);
 
-            // Send the email
-            Mail::raw($message, function (Message $mailMessage) use ($emailAddress, $subject, $emailConfig) {
-                $mailMessage->to($emailAddress)
-                    ->subject($subject)
-                    ->from($emailConfig->from_address, $emailConfig->from_name);
-            });
+            // Check if message is a view or simple text
+            // If viewData is allocated or message ends with .blade.php or contains dots suggesting a path, we try to use view
+            if (!empty($viewData) || view()->exists($message)) {
+                Mail::send($message, $viewData, function (Message $mailMessage) use ($emailAddress, $subject, $emailConfig) {
+                    $mailMessage->to($emailAddress)
+                        ->subject($subject)
+                        ->from($emailConfig->from_address, $emailConfig->from_name);
+                });
+            } else {
+                 // Send simple raw email
+                Mail::raw($message, function (Message $mailMessage) use ($emailAddress, $subject, $emailConfig) {
+                    $mailMessage->to($emailAddress)
+                        ->subject($subject)
+                        ->from($emailConfig->from_address, $emailConfig->from_name);
+                });
+            }
             
             Log::info('Email notification sent successfully', [
                 'user_id' => $userId,
@@ -242,12 +253,14 @@ class NotificationService
      * @param int $userId
      * @param string $phoneNumber
      * @param string $emailAddress
-     * @param string $message
-     * @param string $subject
-     * @param string|null $idempotencyKey Optional idempotency key to prevent duplicate notifications
+     * @param string $message WhatsApp message
+     * @param string $subject Email Subject
+     * @param string|null $idempotencyKey Optional idempotency key
+     * @param string|null $emailView Optional view name for email
+     * @param array $viewData Optional data for email view
      * @return array
      */
-    public function sendNotification(int $userId, string $phoneNumber, string $emailAddress, string $message, string $subject = 'Notification', string $idempotencyKey = null): array
+    public function sendNotification(int $userId, string $phoneNumber, string $emailAddress, string $message, string $subject = 'Notification', string $idempotencyKey = null, string $emailView = null, array $viewData = []): array
     {
         // Generate idempotency key if not provided
         if (!$idempotencyKey) {
@@ -261,7 +274,12 @@ class NotificationService
         }
 
         $whatsappResult = $this->sendWhatsAppNotification($userId, $phoneNumber, $message, null, $idempotencyKey . '_whatsapp');
-        $emailResult = $this->sendEmailNotification($userId, $emailAddress, $subject, $message, $idempotencyKey . '_email');
+        
+        // Use view if provided, otherwise fallback to message text
+        $emailContent = $emailView ?: $message;
+        $emailData = $emailView ? $viewData : [];
+        
+        $emailResult = $this->sendEmailNotification($userId, $emailAddress, $subject, $emailContent, $idempotencyKey . '_email', $emailData);
         
         return [
             'whatsapp' => $whatsappResult,
