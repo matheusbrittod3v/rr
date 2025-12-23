@@ -21,11 +21,11 @@
                             <h1 class="text-white font-bold text-lg">Chat de Atendimento</h1>
                             <p class="text-blue-100 text-sm flex items-center space-x-2">
                                 <span id="connection-status-indicator" class="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></span>
-                                <span>Você: {{ session('chat_user_role', 'client') === 'client' ? 'Cliente' : 'Prestador' }}</span>
+                                <span>Você: {{ session('chat_user_role', 'client') === 'client' ? 'Cliente' : 'Técnico' }}</span>
                                 <span class="mx-1">•</span>
                                 <span id="other-user-status" class="flex items-center">
                                     <span class="w-2 h-2 bg-gray-400 rounded-full mr-1"></span>
-                                    <span>{{ session('chat_user_role', 'client') === 'client' ? 'Prestador' : 'Cliente' }}</span>
+                                    <span>{{ session('chat_user_role', 'client') === 'client' ? 'Técnico' : 'Cliente' }}</span>
                                 </span>
                             </p>
                         </div>
@@ -517,7 +517,7 @@ function initializeChat() {
                 }
                 
                 // Mostrar/ocultar indicador
-                const otherUserType = CHAT_CONFIG.senderType === 'client' ? 'Prestador' : 'Cliente';
+                const otherUserType = CHAT_CONFIG.senderType === 'client' ? 'Técnico' : 'Cliente';
                 const typingIndicator = document.getElementById('typing-indicator');
                 
                 if (data.is_typing) {
@@ -1584,6 +1584,7 @@ const CallManager = {
     },
     
     handleCallEnded(type) {
+        console.log('[CallManager] \ud83d\udcde Chamada encerrada pelo outro lado, tipo:', type);
         SoundManager.playEndCall();
         if (navigator.vibrate) navigator.vibrate(0);
         
@@ -1592,7 +1593,31 @@ const CallManager = {
         if (type === 'call-cancel') msg = 'Chamada cancelada';
         
         this.showToast(msg);
+        
+        // Garantir reset completo e imediato
+        this.forceResetUI();
         this.resetCall();
+    },
+    
+    // Force UI reset para garantir que tudo seja fechado
+    forceResetUI() {
+        console.log('[CallManager] \ud83e\uddf9 For\u00e7ando reset da UI...');
+        
+        // Esconder TODOS os modais e interfaces de chamada
+        const elementsToHide = [
+            'call-interface',
+            'minimized-call', 
+            'incoming-call-modal',
+            'outgoing-call-modal'
+        ];
+        
+        elementsToHide.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.classList.add('hidden');
+                console.log('[CallManager] \u2713 Elemento', id, 'escondido');
+            }
+        });
     },
     
     resetCall() {
@@ -2148,13 +2173,37 @@ const CallManager = {
     },
     
     toggleMinimize() {
-        this.elements.callInterface.classList.toggle('hidden');
-        this.elements.minimizedCall.classList.toggle('hidden');
+        console.log('[CallManager] Toggle minimize chamado');
+        
+        const callInterface = this.elements.callInterface;
+        const minimizedCall = this.elements.minimizedCall;
+        
+        if (!callInterface || !minimizedCall) {
+            console.error('[CallManager] Elementos de minimizar n\u00e3o encontrados');
+            return;
+        }
+        
+        // Se a interface est\u00e1 vis\u00edvel, minimizar
+        if (!callInterface.classList.contains('hidden')) {
+            callInterface.classList.add('hidden');
+            minimizedCall.classList.remove('hidden');
+            console.log('[CallManager] Chamada minimizada');
+        } else {
+            // Se a interface est\u00e1 escondida, maximizar
+            callInterface.classList.remove('hidden');
+            minimizedCall.classList.add('hidden');
+            console.log('[CallManager] Chamada maximizada');
+        }
     },
     
     maximizeCall() {
-        this.elements.callInterface.classList.remove('hidden');
-        this.elements.minimizedCall.classList.add('hidden');
+        console.log('[CallManager] Maximizando chamada');
+        if (this.elements.callInterface) {
+            this.elements.callInterface.classList.remove('hidden');
+        }
+        if (this.elements.minimizedCall) {
+            this.elements.minimizedCall.classList.add('hidden');
+        }
     },
     
     startTimer() {

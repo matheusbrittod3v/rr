@@ -27,7 +27,7 @@ class UserForm
                     ->extraInputAttributes(['class' => 'phone-mask-input'])
                     ->nullable(),
                 Toggle::make('is_provider')
-                    ->label('Este usuário é um prestador de serviço?')
+                    ->label('Este usuário é um técnico?')
                     ->inline(false),
                 DateTimePicker::make('email_verified_at'),
                 TextInput::make('password')

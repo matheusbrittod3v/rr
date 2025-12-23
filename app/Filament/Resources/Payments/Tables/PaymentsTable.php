@@ -36,7 +36,7 @@ class PaymentsTable
                     ->badge()
                     ->searchable(),
                 TextColumn::make('orcamento.prestador.name')
-                    ->label('Prestador')
+                    ->label('Técnico')
                     ->searchable()
                     ->sortable()
                     ->toggleable(),

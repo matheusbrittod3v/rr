@@ -27,7 +27,7 @@ class UsersTable
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 IconColumn::make('is_provider')
-                    ->label('Prestador')
+                    ->label('Técnico')
                     ->boolean()
                     ->toggleable(),
                 TextColumn::make('roles.name')

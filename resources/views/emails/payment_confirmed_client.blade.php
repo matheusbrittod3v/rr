@@ -4,7 +4,7 @@
     <h1>Pagamento Aprovado! ✅</h1>
     <p>Olá,</p>
     <p>Temos ótimas notícias! Seu pagamento no valor de <strong>R$ {{ number_format($payment->valor, 2, ',', '.') }}</strong> foi aprovado com sucesso.</p>
-    <p>Uma sala de chat exclusiva foi criada para você se comunicar diretamente com o prestador de serviço.</p>
+    <p>Uma sala de chat exclusiva foi criada para você se comunicar diretamente com o técnico.</p>
     
     <div class="attributes">
         <div class="attributes_content">

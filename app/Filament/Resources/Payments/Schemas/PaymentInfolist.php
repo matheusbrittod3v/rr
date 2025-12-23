@@ -22,7 +22,7 @@ class PaymentInfolist
                 TextEntry::make('status')
                     ->badge(),
                 TextEntry::make('orcamento.prestador.name')
-                    ->label('Prestador')
+                    ->label('Técnico')
                     ->placeholder('-'),
                 TextEntry::make('number_whatsapp')
                     ->placeholder('-'),

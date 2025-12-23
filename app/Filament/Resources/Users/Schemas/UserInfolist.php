@@ -19,7 +19,7 @@ class UserInfolist
                     ->label('Phone Number')
                     ->placeholder('-'),
                 IconEntry::make('is_provider')
-                    ->label('Prestador de Serviço')
+                    ->label('Técnico')
                     ->boolean(),
                 TextEntry::make('email_verified_at')
                     ->dateTime()

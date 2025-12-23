@@ -12,7 +12,7 @@ class FilaPrestadorInfolist
     {
         return $schema
             ->components([
-                Section::make('Fila de Prestador')
+                Section::make('Fila de Técnicos')
                     ->columns(2)
                     ->schema([
                         TextEntry::make('id')

@@ -13,7 +13,7 @@
         </div>
         
         <h3 class="text-xl font-bold text-gray-900 mb-1">Chamando...</h3>
-        <p class="text-gray-500 mb-8">{{ session('chat_user_role') === 'client' ? 'Prestador' : 'Cliente' }}</p>
+        <p class="text-gray-500 mb-8">{{ session('chat_user_role') === 'client' ? 'Técnico' : 'Cliente' }}</p>
         
         <button 
             id="cancel-call-btn"
@@ -38,7 +38,7 @@
             </div>
             
             <h3 class="text-2xl font-bold text-gray-900 mb-2">Chamada Recebida</h3>
-            <p class="text-gray-600 mb-6" id="caller-name">{{ session('chat_user_role') === 'client' ? 'Prestador' : 'Cliente' }}</p>
+            <p class="text-gray-600 mb-6" id="caller-name">{{ session('chat_user_role') === 'client' ? 'Técnico' : 'Cliente' }}</p>
             <p class="text-sm text-gray-500 mb-8" id="call-type-label">Chamada de voz</p>
             
             <div class="flex space-x-3">
@@ -173,17 +173,21 @@
     </div>
 </div>
 
-{{-- Chamada Minimizada --}}
-<div id="minimized-call" class="hidden fixed bottom-4 right-4 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl shadow-2xl p-4 z-40 cursor-pointer hover:scale-105 transition-transform" onclick="maximizeCall()">
+{{-- Chamada Minimizada - Maior destaque e z-index --}}
+<div id="minimized-call" class="hidden fixed bottom-20 right-4 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl shadow-2xl p-4 z-[100] cursor-pointer hover:scale-105 transition-all animate-pulse border-2 border-white/30" onclick="maximizeCall()">
     <div class="flex items-center space-x-3">
-        <div class="w-12 h-12 bg-white/20 rounded-full overflow-hidden">
+        <div class="w-12 h-12 bg-white/20 rounded-full overflow-hidden flex items-center justify-center">
             <video id="minimized-video" class="w-full h-full object-cover" autoplay playsinline muted></video>
+            <!-- Ícone fallback quando não tem vídeo -->
+            <svg class="w-6 h-6 text-white absolute" fill="none" stroke="currentColor" viewBox="0 0 24 24" id="minimized-call-icon">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+            </svg>
         </div>
         <div class="text-white">
-            <p class="font-medium">Chamada em andamento</p>
+            <p class="font-medium text-sm">Chamada em andamento</p>
             <p class="text-xs opacity-80" id="minimized-duration">00:00</p>
         </div>
-        <button onclick="event.stopPropagation(); endCall();" class="p-2 bg-red-500 hover:bg-red-600 rounded-full transition-all">
+        <button onclick="event.stopPropagation(); endCall();" class="p-2 bg-red-500 hover:bg-red-600 rounded-full transition-all ml-2 shadow-md">
             <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>

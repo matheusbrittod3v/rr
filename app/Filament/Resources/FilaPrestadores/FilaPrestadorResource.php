@@ -24,6 +24,12 @@ class FilaPrestadorResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'id';
     
+    protected static ?string $modelLabel = 'Técnico na Fila';
+    
+    protected static ?string $pluralModelLabel = 'Fila de Técnicos';
+    
+    protected static ?string $navigationLabel = 'Fila de Técnicos';
+    
     protected static UnitEnum|string|null $navigationGroup = 'Queue Management';
 
     public static function form(Schema $schema): Schema
