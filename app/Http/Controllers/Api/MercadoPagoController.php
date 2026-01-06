@@ -126,12 +126,7 @@ class MercadoPagoController extends Controller
      */
     private function checkPaymentApproval($paymentModel)
     {
-        // Simplified bypass - always approve payments in debug mode
-        $isDebugMode = config('app.debug', false);
-        
-        if ($isDebugMode) {
-            return true;
-        }
+       
         
         // Get payment info from Mercado Pago
         $result = $this->mercadoPagoService->getPaymentInfo($paymentModel->tx_id);
