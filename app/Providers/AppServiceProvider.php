@@ -32,7 +32,7 @@ class AppServiceProvider extends ServiceProvider
         $forceHttps = false;
         
         if (env('APP_ENV') === 'production') {
-            $forceHttps = true;
+            $forceHttps = false;
         }
         
         
@@ -40,7 +40,7 @@ class AppServiceProvider extends ServiceProvider
         try {
             if (request()->hasHeader('X-Forwarded-Proto') && 
                 request()->header('X-Forwarded-Proto') === 'https') {
-                $forceHttps = true;
+                $forceHttps = false;
             }
         } catch (\Exception $e) {
             // Ignora se request não estiver disponível ainda
@@ -49,7 +49,7 @@ class AppServiceProvider extends ServiceProvider
         // 3. Ou se APP_URL já estiver configurado como HTTPS
         $appUrl = config('app.url', '');
         if (!empty($appUrl) && str_starts_with($appUrl, 'https://')) {
-            $forceHttps = true;
+            $forceHttps = false;
         }
         
         if ($forceHttps) {

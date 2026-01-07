@@ -637,6 +637,166 @@
         </div>
     </header>
 
+    <!-- Banner Rotativo -->
+    @if(isset($banners) && $banners->count() > 0)
+    <section id="banner-carousel" class="relative overflow-hidden bg-slate-900">
+        @foreach($banners as $banner)
+        @if($banner->imagens && count($banner->imagens) > 0)
+        <div class="banner-container" data-tempo="{{ $banner->tempo_rotacao }}" data-banner-id="{{ $banner->id }}">
+            <div class="banner-slider relative w-full" style="height: 300px;">
+                @foreach($banner->imagens as $index => $imagem)
+                <div class="banner-slide absolute inset-0 transition-opacity duration-700 {{ $index === 0 ? 'opacity-100' : 'opacity-0' }}" data-index="{{ $index }}">
+                    <img src="{{ asset('storage/' . $imagem) }}" 
+                         alt="{{ $banner->nome }} - Imagem {{ $index + 1 }}" 
+                         class="w-full h-full object-cover">
+                </div>
+                @endforeach
+                
+                <!-- Indicadores -->
+                @if(count($banner->imagens) > 1)
+                <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2 z-10">
+                    @foreach($banner->imagens as $index => $imagem)
+                    <button class="banner-indicator w-3 h-3 rounded-full transition-all duration-300 {{ $index === 0 ? 'bg-white scale-125' : 'bg-white/50 hover:bg-white/75' }}" 
+                            data-index="{{ $index }}"
+                            aria-label="Ir para slide {{ $index + 1 }}">
+                    </button>
+                    @endforeach
+                </div>
+                
+                <!-- Setas de Navegação -->
+                <button class="banner-prev absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white p-3 rounded-full transition-all duration-300 z-10" aria-label="Anterior">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
+                <button class="banner-next absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white p-3 rounded-full transition-all duration-300 z-10" aria-label="Próximo">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </button>
+                @endif
+            </div>
+        </div>
+        @endif
+        @endforeach
+    </section>
+    
+    <style>
+        .banner-slider {
+            min-height: 200px;
+        }
+        
+        @media (min-width: 768px) {
+            .banner-slider {
+                height: 400px !important;
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            .banner-slider {
+                height: 500px !important;
+            }
+        }
+        
+        .banner-slide img {
+            object-position: center;
+        }
+        
+        .banner-prev:hover, .banner-next:hover {
+            transform: translateY(-50%) scale(1.1);
+        }
+    </style>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const bannerContainers = document.querySelectorAll('.banner-container');
+            
+            bannerContainers.forEach(container => {
+                const slides = container.querySelectorAll('.banner-slide');
+                const indicators = container.querySelectorAll('.banner-indicator');
+                const prevBtn = container.querySelector('.banner-prev');
+                const nextBtn = container.querySelector('.banner-next');
+                const tempo = parseInt(container.dataset.tempo) || 5000;
+                
+                if (slides.length <= 1) return;
+                
+                let currentIndex = 0;
+                let intervalId = null;
+                
+                function showSlide(index) {
+                    // Normalizar índice
+                    if (index >= slides.length) index = 0;
+                    if (index < 0) index = slides.length - 1;
+                    
+                    // Atualizar slides
+                    slides.forEach((slide, i) => {
+                        slide.classList.toggle('opacity-100', i === index);
+                        slide.classList.toggle('opacity-0', i !== index);
+                    });
+                    
+                    // Atualizar indicadores
+                    indicators.forEach((indicator, i) => {
+                        indicator.classList.toggle('bg-white', i === index);
+                        indicator.classList.toggle('scale-125', i === index);
+                        indicator.classList.toggle('bg-white/50', i !== index);
+                    });
+                    
+                    currentIndex = index;
+                }
+                
+                function nextSlide() {
+                    showSlide(currentIndex + 1);
+                }
+                
+                function prevSlide() {
+                    showSlide(currentIndex - 1);
+                }
+                
+                function startAutoPlay() {
+                    stopAutoPlay();
+                    intervalId = setInterval(nextSlide, tempo);
+                }
+                
+                function stopAutoPlay() {
+                    if (intervalId) {
+                        clearInterval(intervalId);
+                        intervalId = null;
+                    }
+                }
+                
+                // Event listeners
+                if (prevBtn) {
+                    prevBtn.addEventListener('click', () => {
+                        prevSlide();
+                        startAutoPlay(); // Reiniciar timer após interação
+                    });
+                }
+                
+                if (nextBtn) {
+                    nextBtn.addEventListener('click', () => {
+                        nextSlide();
+                        startAutoPlay(); // Reiniciar timer após interação
+                    });
+                }
+                
+                indicators.forEach((indicator, i) => {
+                    indicator.addEventListener('click', () => {
+                        showSlide(i);
+                        startAutoPlay(); // Reiniciar timer após interação
+                    });
+                });
+                
+                // Pausar no hover
+                container.addEventListener('mouseenter', stopAutoPlay);
+                container.addEventListener('mouseleave', startAutoPlay);
+                
+                // Iniciar autoplay
+                startAutoPlay();
+            });
+        });
+    </script>
+    @endif
+
     <!-- Hero Section -->
     <section class="py-16 md:py-24 gradient-bg hero-pattern">
         <div class="container mx-auto px-4 text-center">

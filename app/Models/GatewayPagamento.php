@@ -15,6 +15,11 @@ class GatewayPagamento extends Model
         'url',
         'token',
         'user_id',
+        'debug_mode',
+    ];
+
+    protected $casts = [
+        'debug_mode' => 'boolean',
     ];
 
     // Relacionamento com o usuário

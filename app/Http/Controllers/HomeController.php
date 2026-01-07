@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Service;
 use App\Models\Orcamento;
 use App\Models\FilaOrcamento;
+use App\Models\Banner;
 use App\Jobs\AssignBudgetToProviderJob;
 use Illuminate\Support\Facades\Log;
 
@@ -19,8 +20,13 @@ class HomeController extends Controller
             return Service::with(['customFields', 'marca'])->get();
         });
         
-        // Pass the services data to the welcome view
-        return view('welcome', compact('services'));
+        // Get active banners ordered by ordem
+        $banners = cache()->remember('active_banners', 300, function () {
+            return Banner::ativos()->ordenados()->get();
+        });
+        
+        // Pass the services and banners data to the welcome view
+        return view('welcome', compact('services', 'banners'));
     }
     
     public function requestServiceQuote(Request $request)

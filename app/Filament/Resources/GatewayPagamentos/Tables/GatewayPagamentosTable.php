@@ -21,6 +21,11 @@ class GatewayPagamentosTable
                     ->searchable(),
                 TextColumn::make('token')
                     ->searchable(),
+                \Filament\Tables\Columns\ToggleColumn::make('debug_mode')
+                    ->label('Modo Debug')
+                    ->onColor('success')
+                    ->offColor('danger')
+                    ->sortable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
