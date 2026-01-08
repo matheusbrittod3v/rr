@@ -37,28 +37,42 @@ class MercadoPagoController extends Controller
             // Step 1: Validate payment exists
             $paymentModel = $this->getPaymentById($paymentRecordId);
             if (! $paymentModel) {
-                // Always redirect back with error message
-                return redirect()->back()->with('error', 'Payment not found');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment not found',
+                ], 404);
             }
 
             // Step 2: Check if already processed
             if ($this->isPaymentAlreadyProcessed($paymentModel)) {
-                // Redirect to chat room for already processed payments
+                // Return redirect URL for already processed payments
                 $existingChatRoom = ChatRoom::where('payment_id', $paymentModel->id)->first();
                 if ($existingChatRoom) {
-                    $this->setChatRoomSession($existingChatRoom);
+                    $chatService = app(\App\Services\ChatService::class);
+                    $chatService->setChatRoomSession($existingChatRoom, 'client', true);
 
-                    return Redirect::to(route('chat.room', $existingChatRoom->room_code));
+                    return response()->json([
+                        'success' => true,
+                        'redirect_url' => route('chat.room', $existingChatRoom->room_code),
+                        'message' => 'Payment already processed',
+                    ]);
                 }
 
-                return redirect()->back()->with('error', 'Chat room not found');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Chat room not found',
+                ], 404);
             }
 
             // Step 3: Check payment approval status
             $isApproved = $this->checkPaymentApproval($paymentModel);
             if (! $isApproved) {
-                // Redirect back with error for non-approved payments
-                return redirect()->back()->with('error', 'Payment not approved');
+                // Return pending status for non-approved payments
+                return response()->json([
+                    'success' => false,
+                    'status' => 'pending',
+                    'message' => 'Payment not approved yet',
+                ]);
             }
 
             // Step 4: Process approved payment
@@ -70,8 +84,10 @@ class MercadoPagoController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            // Always redirect back with error message
-            return redirect()->back()->with('error', 'Internal server error');
+            return response()->json([
+                'success' => false,
+                'message' => 'Internal server error',
+            ], 500);
         }
     }
 
