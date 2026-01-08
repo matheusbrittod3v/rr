@@ -2376,8 +2376,12 @@ E-mail: ${email}`);
                             
                             // Redirect to chat room using the URL from API
                             window.location.href = data.redirect_url;
-                        } else if (!data.success && data.message) {
-                            // Error occurred, stop polling
+                        } else if (!data.success && data.status === 'pending') {
+                            // Payment is still pending, continue polling silently
+                            console.log('Payment status: pending, continuing to poll...');
+                            // Don't stop polling, don't show alert
+                        } else if (!data.success && data.message && data.status !== 'pending') {
+                            // Real error occurred, stop polling
                             console.error('Error checking payment status:', data.message);
                             clearInterval(window.paymentPollingIntervalId);
                             alert('Erro ao verificar status do pagamento: ' + data.message);
