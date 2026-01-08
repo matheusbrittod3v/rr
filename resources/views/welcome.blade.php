@@ -594,7 +594,6 @@
             <!-- Desktop Navigation -->
             <nav class="hidden md:flex space-x-8">
                 <a href="#services" class="text-slate-600 hover:text-primary font-medium dark:text-slate-300 dark:hover:text-primary">Serviços</a>
-                <a href="#how-it-works" class="text-slate-600 hover:text-primary font-medium dark:text-slate-300 dark:hover:text-primary">Como Funciona</a>
                 <a href="#benefits" class="text-slate-600 hover:text-primary font-medium dark:text-slate-300 dark:hover:text-primary">Benefícios</a>
                 <a href="#faq" class="text-slate-600 hover:text-primary font-medium dark:text-slate-300 dark:hover:text-primary">FAQ</a>
             </nav>
@@ -624,7 +623,6 @@
         <div id="mobile-menu" class="mobile-menu hidden md:hidden">
             <div class="flex flex-col space-y-4 pb-4">
                 <a href="#services" class="text-slate-600 hover:text-primary font-medium dark:text-slate-300 dark:hover:text-primary">Serviços</a>
-                <a href="#how-it-works" class="text-slate-600 hover:text-primary font-medium dark:text-slate-300 dark:hover:text-primary">Como Funciona</a>
                 <a href="#benefits" class="text-slate-600 hover:text-primary font-medium dark:text-slate-300 dark:hover:text-primary">Benefícios</a>
                 <a href="#faq" class="text-slate-600 hover:text-primary font-medium dark:text-slate-300 dark:hover:text-primary">FAQ</a>
                 
@@ -636,184 +634,6 @@
             </div>
         </div>
     </header>
-
-    <!-- Banner Rotativo -->
-    @if(isset($banners) && $banners->count() > 0)
-    <section id="banner-carousel" class="relative overflow-hidden bg-slate-900">
-        @foreach($banners as $banner)
-        @if($banner->imagens && count($banner->imagens) > 0)
-        <div class="banner-container" data-tempo="{{ $banner->tempo_rotacao }}" data-banner-id="{{ $banner->id }}">
-            <div class="banner-slider relative w-full" style="height: 300px;">
-                @foreach($banner->imagens as $index => $imagem)
-                <div class="banner-slide absolute inset-0 transition-opacity duration-700 {{ $index === 0 ? 'opacity-100' : 'opacity-0' }}" data-index="{{ $index }}">
-                    <img src="{{ asset('storage/' . $imagem) }}" 
-                         alt="{{ $banner->nome }} - Imagem {{ $index + 1 }}" 
-                         class="w-full h-full object-cover">
-                </div>
-                @endforeach
-                
-                <!-- Indicadores -->
-                @if(count($banner->imagens) > 1)
-                <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2 z-10">
-                    @foreach($banner->imagens as $index => $imagem)
-                    <button class="banner-indicator w-3 h-3 rounded-full transition-all duration-300 {{ $index === 0 ? 'bg-white scale-125' : 'bg-white/50 hover:bg-white/75' }}" 
-                            data-index="{{ $index }}"
-                            aria-label="Ir para slide {{ $index + 1 }}">
-                    </button>
-                    @endforeach
-                </div>
-                
-                <!-- Setas de Navegação -->
-                <button class="banner-prev absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white p-3 rounded-full transition-all duration-300 z-10" aria-label="Anterior">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                </button>
-                <button class="banner-next absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white p-3 rounded-full transition-all duration-300 z-10" aria-label="Próximo">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                </button>
-                @endif
-            </div>
-        </div>
-        @endif
-        @endforeach
-    </section>
-    
-    <style>
-        .banner-slider {
-            min-height: 200px;
-        }
-        
-        @media (min-width: 768px) {
-            .banner-slider {
-                height: 400px !important;
-            }
-        }
-        
-        @media (min-width: 1024px) {
-            .banner-slider {
-                height: 500px !important;
-            }
-        }
-        
-        .banner-slide img {
-            object-position: center;
-        }
-        
-        .banner-prev:hover, .banner-next:hover {
-            transform: translateY(-50%) scale(1.1);
-        }
-    </style>
-    
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const bannerContainers = document.querySelectorAll('.banner-container');
-            
-            bannerContainers.forEach(container => {
-                const slides = container.querySelectorAll('.banner-slide');
-                const indicators = container.querySelectorAll('.banner-indicator');
-                const prevBtn = container.querySelector('.banner-prev');
-                const nextBtn = container.querySelector('.banner-next');
-                const tempo = parseInt(container.dataset.tempo) || 5000;
-                
-                if (slides.length <= 1) return;
-                
-                let currentIndex = 0;
-                let intervalId = null;
-                
-                function showSlide(index) {
-                    // Normalizar índice
-                    if (index >= slides.length) index = 0;
-                    if (index < 0) index = slides.length - 1;
-                    
-                    // Atualizar slides
-                    slides.forEach((slide, i) => {
-                        slide.classList.toggle('opacity-100', i === index);
-                        slide.classList.toggle('opacity-0', i !== index);
-                    });
-                    
-                    // Atualizar indicadores
-                    indicators.forEach((indicator, i) => {
-                        indicator.classList.toggle('bg-white', i === index);
-                        indicator.classList.toggle('scale-125', i === index);
-                        indicator.classList.toggle('bg-white/50', i !== index);
-                    });
-                    
-                    currentIndex = index;
-                }
-                
-                function nextSlide() {
-                    showSlide(currentIndex + 1);
-                }
-                
-                function prevSlide() {
-                    showSlide(currentIndex - 1);
-                }
-                
-                function startAutoPlay() {
-                    stopAutoPlay();
-                    intervalId = setInterval(nextSlide, tempo);
-                }
-                
-                function stopAutoPlay() {
-                    if (intervalId) {
-                        clearInterval(intervalId);
-                        intervalId = null;
-                    }
-                }
-                
-                // Event listeners
-                if (prevBtn) {
-                    prevBtn.addEventListener('click', () => {
-                        prevSlide();
-                        startAutoPlay(); // Reiniciar timer após interação
-                    });
-                }
-                
-                if (nextBtn) {
-                    nextBtn.addEventListener('click', () => {
-                        nextSlide();
-                        startAutoPlay(); // Reiniciar timer após interação
-                    });
-                }
-                
-                indicators.forEach((indicator, i) => {
-                    indicator.addEventListener('click', () => {
-                        showSlide(i);
-                        startAutoPlay(); // Reiniciar timer após interação
-                    });
-                });
-                
-                // Pausar no hover
-                container.addEventListener('mouseenter', stopAutoPlay);
-                container.addEventListener('mouseleave', startAutoPlay);
-                
-                // Iniciar autoplay
-                startAutoPlay();
-            });
-        });
-    </script>
-    @endif
-
-    <!-- Hero Section -->
-    <section class="py-16 md:py-24 gradient-bg hero-pattern">
-        <div class="container mx-auto px-4 text-center">
-            <h1 class="text-4xl md:text-5xl font-bold text-white mb-6">Conectando Clientes aos Melhores Profissionais de Reparo de Software de Celulares</h1>
-            <p class="text-xl text-blue-100 max-w-2xl mx-auto mb-10">Solicite orçamentos personalizados e receba serviços seguros e confiáveis de profissionais especializados.</p>
-            <div class="flex flex-col sm:flex-row justify-center gap-4">
-                <a href="#services" class="bg-white text-primary px-8 py-4 rounded-lg font-bold text-center hover:bg-slate-100 transition btn-primary shadow-lg">
-                    Ver Serviços
-                </a>
-                <a href="#how-it-works" class="bg-transparent border-2 border-white text-white px-8 py-4 rounded-lg font-bold text-center hover:bg-white hover:text-primary transition btn-primary">
-                    Como Funciona
-                </a>
-            </div>
-        </div>
-    </section>
-
-    <!-- Marcas Section (Initial View) -->
     <section id="services" class="py-16 bg-white">
         <div class="container mx-auto px-4">
             <div id="marcasView" class="marcas-view">
@@ -866,50 +686,6 @@
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" id="servicosGrid">
                     <!-- Serviços serão preenchidos dinamicamente -->
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- How It Works -->
-    <section id="how-it-works" class="py-16 bg-slate-50">
-        <div class="container mx-auto px-4">
-            <div class="text-center mb-16">
-                <h2 class="text-3xl md:text-4xl font-bold text-slate-900 mb-4 dark:text-white">Como Funciona o renttool</h2>
-                <p class="text-slate-600 max-w-2xl mx-auto dark:text-slate-300">Processo simples para conectar você aos melhores profissionais de reparo de software em minutos.</p>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
-                <div class="text-center p-6 feature-card bg-white rounded-2xl shadow-sm dark:bg-slate-800">
-                    <div class="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-6">
-                        <span class="text-white font-bold text-xl">1</span>
-                    </div>
-                    <h3 class="font-bold text-xl text-slate-900 mb-3 dark:text-white">Escolha o Serviço</h3>
-                    <p class="text-slate-600 dark:text-slate-300">Navegue em nossa seleção de serviços de reparo de software e selecione o que você precisa.</p>
-                </div>
-                
-                <div class="text-center p-6 feature-card bg-white rounded-2xl shadow-sm dark:bg-slate-800">
-                    <div class="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-6">
-                        <span class="text-white font-bold text-xl">2</span>
-                    </div>
-                    <h3 class="font-bold text-xl text-slate-900 mb-3 dark:text-white">Solicite Orçamento</h3>
-                    <p class="text-slate-600 dark:text-slate-300">Clique em "Solicitar Orçamento" e informe seus dados para receber propostas personalizadas.</p>
-                </div>
-                
-                <div class="text-center p-6 feature-card bg-white rounded-2xl shadow-sm dark:bg-slate-800">
-                    <div class="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-6">
-                        <span class="text-white font-bold text-xl">3</span>
-                    </div>
-                    <h3 class="font-bold text-xl text-slate-900 mb-3 dark:text-white">Pague com PIX</h3>
-                    <p class="text-slate-600 dark:text-slate-300">Efetue o pagamento via PIX e aguarde a confirmação para prosseguir.</p>
-                </div>
-                
-                <div class="text-center p-6 feature-card bg-white rounded-2xl shadow-sm dark:bg-slate-800">
-                    <div class="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-6">
-                        <span class="text-white font-bold text-xl">4</span>
-                    </div>
-                    <h3 class="font-bold text-xl text-slate-900 mb-3 dark:text-white">Conecte-se ao Profissional</h3>
-                    <p class="text-slate-600 dark:text-slate-300">Seja conectado diretamente ao profissional para realizar o serviço e obter instruções.</p>
                 </div>
             </div>
         </div>
