@@ -1643,7 +1643,8 @@
             
 
             
-            // Handle form submission
+            // Handle form submission (legacy rental form - may not exist)
+            const rentalForm = document.getElementById("rentalForm");
             if (rentalForm) {
                 rentalForm.addEventListener("submit", function(e) {
                     e.preventDefault();
@@ -1826,58 +1827,61 @@ E-mail: ${email}`);
             });
             
             // Handle form submission
-            document.getElementById('serviceRequestForm').addEventListener('submit', function(e) {
-                e.preventDefault();
+            const serviceRequestForm = document.getElementById('serviceRequestForm');
+            if (serviceRequestForm) {
+                serviceRequestForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    // Get form data
+                    const formData = new FormData(this);
                 
-                // Get form data
-                const formData = new FormData(this);
-                
-                // Add custom fields to formData
-                const customFields = document.querySelectorAll('[name^="custom_field_"]');
-                customFields.forEach(field => {
-                    formData.append(field.name, field.value);
+                    // Add custom fields to formData
+                    const customFields = document.querySelectorAll('[name^="custom_field_"]');
+                    customFields.forEach(field => {
+                        formData.append(field.name, field.value);
+                    });
+                    
+                    // Show loading state
+                    const submitButton = this.querySelector('button[type="submit"]');
+                    const originalText = submitButton.textContent;
+                    submitButton.textContent = 'Enviando...';
+                    submitButton.disabled = true;
+                    
+                    // Send request to backend
+                    fetch('/request-service-quote', {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        }
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.success) {
+                            // Show loading modal and wait for response instead of alert
+                            closeServiceModal();
+                            showLoadingModal();
+                            startListeningForBudgetResponse(data.orcamento_id, data.unique_id);
+                        } else {
+                            alert('Erro ao solicitar orçamento: ' + (data.message || 'Erro desconhecido'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Erro ao solicitar orçamento. Por favor, tente novamente.');
+                    })
+                    .finally(() => {
+                        // Restore button state
+                        submitButton.textContent = originalText;
+                        submitButton.disabled = false;
+                    });
                 });
-                
-                // Show loading state
-                const submitButton = this.querySelector('button[type="submit"]');
-                const originalText = submitButton.textContent;
-                submitButton.textContent = 'Enviando...';
-                submitButton.disabled = true;
-                
-                // Send request to backend
-                fetch('/request-service-quote', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                    }
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        // Show loading modal and wait for response instead of alert
-                        closeServiceModal();
-                        showLoadingModal();
-                        startListeningForBudgetResponse(data.orcamento_id, data.unique_id);
-                    } else {
-                        alert('Erro ao solicitar orçamento: ' + (data.message || 'Erro desconhecido'));
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Erro ao solicitar orçamento. Por favor, tente novamente.');
-                })
-                .finally(() => {
-                    // Restore button state
-                    submitButton.textContent = originalText;
-                    submitButton.disabled = false;
-                });
-            });
+            }
         });
         
         function openServiceModal(serviceId) {
@@ -2063,22 +2067,25 @@ E-mail: ${email}`);
         }
         
         // Handle form submission
-        document.getElementById('serviceForm').addEventListener('submit', function(event) {
-            event.preventDefault();
-            const formData = new FormData(this);
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', this.action, true);
-            xhr.onload = function() {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    alert('Service booked successfully!');
-                    document.getElementById('serviceModal').style.display = 'none';
-                    document.body.classList.remove('modal-open');
-                } else {
-                    alert('Error booking service. Please try again.');
-                }
-            };
-            xhr.send(formData);
-        });
+        const serviceForm = document.getElementById('serviceForm');
+        if (serviceForm) {
+            serviceForm.addEventListener('submit', function(event) {
+                event.preventDefault();
+                const formData = new FormData(this);
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', this.action, true);
+                xhr.onload = function() {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        alert('Service booked successfully!');
+                        document.getElementById('serviceModal').style.display = 'none';
+                        document.body.classList.remove('modal-open');
+                    } else {
+                        alert('Error booking service. Please try again.');
+                    }
+                };
+                xhr.send(formData);
+            });
+        }
         
         function startListeningForBudgetResponse(orcamentoId, uniqueId) {
             // Clear any existing interval
