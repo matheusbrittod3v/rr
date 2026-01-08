@@ -19,11 +19,13 @@ class PaymentController extends Controller
 {
     protected $mercadoPagoService;
     protected $notificationService;
+    protected $chatService;
 
-    public function __construct(MercadoPagoService $mercadoPagoService = null, NotificationService $notificationService = null)
+    public function __construct(MercadoPagoService $mercadoPagoService = null, NotificationService $notificationService = null, ChatService $chatService = null)
     {
         $this->mercadoPagoService = $mercadoPagoService ?? new MercadoPagoService();
         $this->notificationService = $notificationService;
+        $this->chatService = $chatService ?? new ChatService();
     }
 
     /**
@@ -522,9 +524,19 @@ public function processRefundRequest(Request $request)
                 
                 // Create chat room if payment is approved
                 if ($mappedStatus === 'pago') {
-                    \App\Http\Controllers\ChatController::createChatRoomForPayment($payment);
+                    $this->chatService->createChatRoomForPayment($payment);
                     // Dispatch event for payment approval
                     event(new PaymentStatusUpdated($payment, 'approved', 'Payment approved and chat room created'));
+                }
+            }
+
+            $redirectUrl = null;
+            if ($mappedStatus === 'pago') {
+                $chatRoom = \App\Models\ChatRoom::where('payment_id', $payment->id)->first();
+                if ($chatRoom) {
+                    $redirectUrl = route('chat.room', $chatRoom->room_code);
+                    // Opcional: Autenticar a sessão aqui para o usuário não precisar de senha
+                    $this->chatService->setChatRoomSession($chatRoom, 'client', true);
                 }
             }
 
@@ -533,6 +545,7 @@ public function processRefundRequest(Request $request)
                 'status' => $mappedStatus,
                 'payment_id' => $payment->id,
                 'valor' => $payment->valor,
+                'redirect_url' => $redirectUrl,
             ]);
         } catch (\Exception $e) {
             Log::error('PaymentController: Payment status check error', [

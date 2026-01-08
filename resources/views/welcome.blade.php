@@ -1643,36 +1643,12 @@
             
 
             
-            // Handle form submission
+            // Handle rental form submission (Legacy/Safety Check)
+            const rentalForm = document.getElementById("rentalForm");
             if (rentalForm) {
                 rentalForm.addEventListener("submit", function(e) {
                     e.preventDefault();
-                    
-                    const whatsapp = document.getElementById("whatsapp").value;
-                    const email = document.getElementById("email").value;
-                    
-                    if (!whatsapp || !email) {
-                        alert("Por favor, preencha todos os campos.");
-                        return;
-                    }
-                    
-                    // Format the phone number based on region
-                    const formattedPhone = formatPhoneNumber(whatsapp);
-                    
-                    // In a real implementation, you would process the payment here
-                    // For now, we'll just show a success message
-                    alert(`Pedido de aluguel enviado!
-
-Ferramenta: ${modalToolName.textContent}
-Valor: R$${modalToolPrice.textContent}
-
-Os dados de acesso serão enviados para:
-WhatsApp: +55 ${formattedPhone}
-E-mail: ${email}`);
-                    closeModal();
-                    
-                    // Reset form
-                    rentalForm.reset();
+                    // Implementation details if needed...
                 });
             }
             
@@ -1825,60 +1801,90 @@ E-mail: ${email}`);
                 }
             });
             
-            // Handle form submission
-            document.getElementById('serviceRequestForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                // Get form data
-                const formData = new FormData(this);
-                
-                // Add custom fields to formData
-                const customFields = document.querySelectorAll('[name^="custom_field_"]');
-                customFields.forEach(field => {
-                    formData.append(field.name, field.value);
+            // Handle form submission (Safety check)
+            const serviceRequestForm = document.getElementById('serviceRequestForm');
+            if (serviceRequestForm) {
+                serviceRequestForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    // Get form data
+                    const formData = new FormData(this);
+                    
+                    // Add custom fields to formData
+                    const customFields = document.querySelectorAll('[name^="custom_field_"]');
+                    customFields.forEach(field => {
+                        formData.append(field.name, field.value);
+                    });
+                    
+                    // Show loading state
+                    const submitButton = this.querySelector('button[type="submit"]');
+                    if (submitButton) {
+                        const originalText = submitButton.textContent;
+                        submitButton.textContent = 'Enviando...';
+                        submitButton.disabled = true;
+                        
+                        // Send request to backend
+                        fetch('/request-service-quote', {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                            }
+                        })
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! status: ${response.status}`);
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            if (data.success) {
+                                // Show loading modal and wait for response
+                                closeServiceModal();
+                                showLoadingModal();
+                                if (data.orcamento_id && data.unique_id) {
+                                    startListeningForBudgetResponse(data.orcamento_id, data.unique_id);
+                                }
+                            } else {
+                                alert('Erro ao solicitar orçamento: ' + (data.message || 'Erro desconhecido'));
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            alert('Erro ao solicitar orçamento. Por favor, tente novamente.');
+                        })
+                        .finally(() => {
+                            // Restore button state
+                            submitButton.textContent = originalText;
+                            submitButton.disabled = false;
+                        });
+                    }
                 });
-                
-                // Show loading state
-                const submitButton = this.querySelector('button[type="submit"]');
-                const originalText = submitButton.textContent;
-                submitButton.textContent = 'Enviando...';
-                submitButton.disabled = true;
-                
-                // Send request to backend
-                fetch('/request-service-quote', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                    }
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        // Show loading modal and wait for response instead of alert
-                        closeServiceModal();
-                        showLoadingModal();
-                        startListeningForBudgetResponse(data.orcamento_id, data.unique_id);
-                    } else {
-                        alert('Erro ao solicitar orçamento: ' + (data.message || 'Erro desconhecido'));
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Erro ao solicitar orçamento. Por favor, tente novamente.');
-                })
-                .finally(() => {
-                    // Restore button state
-                    submitButton.textContent = originalText;
-                    submitButton.disabled = false;
-                });
-            });
+            }
         });
+
+        // Helper functions for modal management
+        function showLoadingModal() {
+            const loadingModal = document.getElementById('loadingModal');
+            if (loadingModal) {
+                loadingModal.style.display = 'block';
+                setTimeout(() => loadingModal.classList.add('show'), 10);
+                document.body.classList.add('modal-open');
+            }
+        }
+
+        function closeServiceModal() {
+            const serviceModal = document.getElementById('serviceModal');
+            if (serviceModal) {
+                serviceModal.classList.remove('show');
+                setTimeout(() => {
+                    serviceModal.style.display = 'none';
+                    if (!document.querySelector('.modal.show')) {
+                        document.body.classList.remove('modal-open');
+                    }
+                }, 300);
+            }
+        }
         
         function openServiceModal(serviceId) {
             try {
@@ -1940,88 +1946,7 @@ E-mail: ${email}`);
             }
         }
         
-        // Process quote request function
-        function processQuoteRequest() {
-            const whatsapp = document.getElementById("whatsapp").value;
-            const email = document.getElementById("email").value;
-            const serviceId = serviceIdInput.value;
 
-            if (!whatsapp || !email || !serviceId) {
-                alert("Por favor, preencha todos os campos.");
-                return;
-            }
-
-            // Show loading modal
-            quoteRequestModal.style.display = "none";
-            loadingModal.style.display = "block";
-            document.body.classList.add('modal-open');
-
-            // Format the phone number for submission (remove all formatting)
-            const cleanPhone = whatsapp.replace(/\D/g, '');
-
-            // Collect additional field data
-            const additionalFields = {};
-            const customFieldInputs = document.querySelectorAll('#additional-fields-container input[name^="custom_field_"]');
-            customFieldInputs.forEach(input => {
-                const fieldName = input.name;
-                const fieldValue = input.value;
-                additionalFields[fieldName] = fieldValue;
-            });
-
-            // Send quote request to server
-            fetch('/request-service-quote', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                },
-                body: JSON.stringify({
-                    service_id: serviceId,
-                    phone: cleanPhone, // Send the clean phone number with country code
-                    email: email,
-                    additional_fields: additionalFields // Include additional fields
-                })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    // Keep loading modal open and wait for budget response
-                    // Close the quote request modal but keep loading modal visible
-                    closeQuoteRequestModal();
-                    
-                    // Store the orcamento_id for listening to updates
-                    const orcamentoId = data.orcamento_id;
-                    const uniqueId = data.unique_id;
-                    
-                    // Start listening for budget response via polling or WebSocket
-                    startListeningForBudgetResponse(orcamentoId, uniqueId);
-                    
-                    // Keep loading modal open
-                    document.getElementById('loadingModal').style.display = 'block';
-                } else {
-                    // Show error message
-                    closeLoadingModal();
-                    alert("Erro ao enviar solicitação de orçamento: " + (data.message || 'Erro desconhecido'));
-                    quoteRequestModal.style.display = "block";
-                    setTimeout(() => {
-                        quoteRequestModal.classList.add('show');
-                    }, 10);
-                    document.body.classList.add('modal-open');
-                }
-            })
-            .catch(error => {
-                closeLoadingModal();
-                console.error('Full error:', error);
-                alert("Erro ao enviar solicitação de orçamento: " + (error.message || 'Erro desconhecido'));
-                quoteRequestModal.style.display = "block";
-                document.body.classList.add('modal-open');
-            });
-        }
         
         // Load additional fields based on service data
         function loadAdditionalFields(serviceId) {
@@ -2062,23 +1987,26 @@ E-mail: ${email}`);
             }
         }
         
-        // Handle form submission
-        document.getElementById('serviceForm').addEventListener('submit', function(event) {
-            event.preventDefault();
-            const formData = new FormData(this);
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', this.action, true);
-            xhr.onload = function() {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    alert('Service booked successfully!');
-                    document.getElementById('serviceModal').style.display = 'none';
-                    document.body.classList.remove('modal-open');
-                } else {
-                    alert('Error booking service. Please try again.');
-                }
-            };
-            xhr.send(formData);
-        });
+        // Handle form submission (Safety Check)
+        const serviceForm = document.getElementById('serviceForm');
+        if (serviceForm) {
+            serviceForm.addEventListener('submit', function(event) {
+                event.preventDefault();
+                const formData = new FormData(this);
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', this.action, true);
+                xhr.onload = function() {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        alert('Service booked successfully!');
+                        document.getElementById('serviceModal').style.display = 'none';
+                        document.body.classList.remove('modal-open');
+                    } else {
+                        alert('Error booking service. Please try again.');
+                    }
+                };
+                xhr.send(formData);
+            });
+        }
         
         function startListeningForBudgetResponse(orcamentoId, uniqueId) {
             // Clear any existing interval
@@ -2353,7 +2281,11 @@ E-mail: ${email}`);
                 pollCount++;
                 console.log(`Payment poll attempt #${pollCount} for payment ID:`, paymentId);
                 
-                fetch(`/api/mercadopago/check-payment-status/${paymentId}`)
+                fetch(`/api/payments/${paymentId}/status`, {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                })
                     .then(response => response.json())
                     .then(data => {
                         console.log('Payment status response:', data);
