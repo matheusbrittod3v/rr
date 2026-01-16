@@ -12,4 +12,4 @@ Allow: /sitemap.xml
 
 Sitemap: https://uniontechnicals.com/sitemap.xml
 
-Host: renttool.com
+Host: uniontechnicals.com

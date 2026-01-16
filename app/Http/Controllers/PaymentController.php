@@ -395,7 +395,7 @@ class PaymentController extends Controller
                 'description' => "Serviço de Desbloqueio - Orçamento #{$orcamento->id}",
                 'payer_email' => $orcamento->email,
                 'payer_first_name' => 'Cliente',
-                'payer_last_name' => 'renttool',
+                'payer_last_name' => 'uniontechnicals',
                 'external_reference' => "orcamento_{$orcamento->id}",
             ];
 

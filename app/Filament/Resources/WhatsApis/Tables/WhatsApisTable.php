@@ -69,18 +69,13 @@ class WhatsApisTable
                 //
             ])
             ->recordActions([
-                EditAction::make(),
-                DeleteAction::make(),
                 ConnectPipelineAction::make(),
                 GenerateQrCodeAction::make(),
-              
                 SelectGroupsAction::make(),
                 TerminateInstanceAction::make(),
             ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
+            ->bulkActions([
+                //
             ])
             ->recordUrl(null);
     }

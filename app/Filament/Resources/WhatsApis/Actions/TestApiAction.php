@@ -58,7 +58,7 @@ class TestApiAction extends Action
                     $requestData = [
                         'chatId' => $data['phone_number'] . '@c.us',
                         'contentType' => $record->type,
-                        'content' => 'Test message sent successfully from renttool.com'
+                        'content' => 'Test message sent successfully from uniontechnicals.com'
                     ];
 
                     Log::info('Request data prepared', ['request_data' => $requestData]);

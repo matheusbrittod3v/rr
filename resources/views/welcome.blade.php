@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="description" content="Conectamos clientes aos melhores profissionais de reparo de software de celulares. Solicite orçamentos personalizados e receba serviços seguros e confiáveis.">
-    <meta name="keywords" content="reparo de software de celulares, serviços de software, profissionais de reparo, orçamento personalizado, renttool">
+    <meta name="keywords" content="reparo de software de celulares, serviços de software, profissionais de reparo, orçamento personalizado, uniontechnicals">
     
-    <title>renttool - Conectando Clientes aos Melhores Profissionais de Reparo de Software de Celulares</title>
+    <title>uniontechnicals - Conectando Clientes aos Melhores Profissionais de Reparo de Software de Celulares</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
@@ -695,7 +695,7 @@
     <section class="py-16 bg-white">
         <div class="container mx-auto px-4">
             <div class="text-center mb-16">
-                <h2 class="text-3xl md:text-4xl font-bold text-slate-900 mb-4 dark:text-white">Benefícios do renttool</h2>
+                <h2 class="text-3xl md:text-4xl font-bold text-slate-900 mb-4 dark:text-white">Benefícios do uniontechnicals</h2>
                 <p class="text-slate-600 max-w-2xl mx-auto dark:text-slate-300">Plataforma que conecta clientes e profissionais de reparo de software com segurança e eficiência.</p>
             </div>
             
@@ -747,7 +747,7 @@
     <section class="py-16 gradient-bg hero-pattern">
         <div class="container mx-auto px-4 text-center">
             <h2 class="text-3xl md:text-4xl font-bold text-white mb-6">Pronto para Começar o Reparo de Software?</h2>
-            <p class="text-blue-100 max-w-2xl mx-auto mb-8 text-lg">Junte-se a milhares de profissionais que confiam no renttool para suas necessidades de reparo de software.</p>
+            <p class="text-blue-100 max-w-2xl mx-auto mb-8 text-lg">Junte-se a milhares de profissionais que confiam no uniontechnicals para suas necessidades de reparo de software.</p>
             <div class="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
                 <a href="#tools" class="bg-white text-primary px-8 py-3 rounded-lg font-bold text-center hover:bg-slate-100 transition btn-primary shadow-lg dark:bg-slate-200 dark:text-slate-800">
                     Ver Ferramentas
@@ -850,6 +850,7 @@
                     
                     <div class="mb-6">
                         <h3 id="modalServiceName" class="font-bold text-xl mb-2 text-white">Nome do Serviço</h3>
+                        <p id="modalServiceDescription" class="text-blue-100 text-sm leading-relaxed mt-2"></p>
                     </div>
                     
                     <div class="mt-8">
@@ -1415,6 +1416,12 @@
                 // Update modal title
                 if (modalServiceName) {
                     modalServiceName.textContent = service.nome_servico;
+                }
+
+                // Update modal description
+                const modalServiceDescription = document.getElementById("modalServiceDescription");
+                if (modalServiceDescription) {
+                    modalServiceDescription.textContent = service.descricao || 'Descrição não disponível.';
                 }
                 
                 // Load additional fields

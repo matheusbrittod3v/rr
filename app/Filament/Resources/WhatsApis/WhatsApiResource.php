@@ -50,9 +50,7 @@ class WhatsApiResource extends Resource
     {
         return [
             'index' => ListWhatsApis::route('/'),
-            'create' => CreateWhatsApi::route('/create'),
             'view' => ViewWhatsApi::route('/{record}'),
-            'edit' => EditWhatsApi::route('/{record}/edit'),
         ];
     }
     
@@ -63,6 +61,12 @@ class WhatsApiResource extends Resource
     
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
+        // If user can view all data, return query without user_id scope
+        if (auth()->user() && auth()->user()->canViewAllData()) {
+            return parent::getEloquentQuery();
+        }
+
+        // Otherwise, filter by user_id
         return parent::getEloquentQuery()->where('user_id', auth()->id());
     }
 
@@ -78,7 +82,16 @@ class WhatsApiResource extends Resource
     
     public static function canCreate(): bool
     {
-        // Only allow creation if user doesn't already have a WhatsApp config
-        return !WhatsApi::userHasConfig(auth()->id());
+        return false;
+    }
+
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return false;
     }
 }

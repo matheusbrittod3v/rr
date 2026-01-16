@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Acesso ao Chat - Renttool')
+@section('title', 'Acesso ao Chat - uniontechnicals')
 
 @section('content')
 <div class="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">

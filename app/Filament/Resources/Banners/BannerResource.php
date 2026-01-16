@@ -30,7 +30,7 @@ class BannerResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'nome';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Configurações';
+    // protected static UnitEnum|string|null $navigationGroup = 'Configurações';
 
     protected static ?int $navigationSort = 1;
 

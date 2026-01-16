@@ -3,17 +3,14 @@
 namespace App\Filament\Resources\WhatsApis\Pages;
 
 use App\Filament\Resources\WhatsApis\Actions\ConnectPipelineAction;
-use App\Filament\Resources\WhatsApis\Actions\SelectGroupsWhenConnectedAction;
-use App\Filament\Resources\WhatsApis\Actions\TerminateInstanceAction;
 use App\Filament\Resources\WhatsApis\Actions\GenerateQrCodeAction;
+use App\Filament\Resources\WhatsApis\Actions\TerminateInstanceAction;
 use App\Filament\Resources\WhatsApis\Actions\TestApiAction;
 use App\Filament\Resources\WhatsApis\WhatsApiResource;
-
 use Filament\Resources\Pages\ListRecords;
-use Filament\Actions\CreateAction;
 use Filament\Tables\Actions\ActionGroup;
-use Filament\Tables\Actions\ViewAction;
 use Filament\Tables\Actions\EditAction;
+use Filament\Tables\Actions\ViewAction;
 
 class ListWhatsApis extends ListRecords
 {
@@ -32,9 +29,7 @@ class ListWhatsApis extends ListRecords
             ];
         }
 
-        return [
-            CreateAction::make(),
-        ];
+        return [];
     }
 
     /**

@@ -49,7 +49,7 @@ class TestEmailAction extends Action
                     
                     // Send a test email
                     Mail::mailer('smtp')->raw(
-                        'This is a test email from renttool.com to verify your email configuration.',
+                        'This is a test email from uniontechnicals.com to verify your email configuration.',
                         function ($message) use ($data, $record) {
                             $message->to($data['test_email'])
                                 ->subject('Test Email Configuration')

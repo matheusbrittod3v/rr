@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="description" content="Histórico de pagamentos e ferramentas alugadas">
-    <meta name="keywords" content="histórico, pagamentos, ferramentas, aluguel, renttool">
+    <meta name="keywords" content="histórico, pagamentos, ferramentas, aluguel, uniontechnicals">
     
-    <title>renttool - Histórico de Pagamentos</title>
+    <title>uniontechnicals - Histórico de Pagamentos</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
@@ -276,7 +276,7 @@
                 <div class="w-10 h-10 rounded-lg gradient-bg flex items-center justify-center">
                     <span class="text-white font-bold text-xl">R</span>
                 </div>
-                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">renttool<span class="text-primary">.store</span></h1>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">uniontechnicals<span class="text-primary">.store</span></h1>
             </div>
             
             <nav class="hidden md:flex space-x-8">
@@ -446,7 +446,7 @@
                         <div class="w-10 h-10 rounded-lg gradient-bg flex items-center justify-center">
                             <span class="text-white font-bold text-xl">R</span>
                         </div>
-                        <h2 class="text-2xl font-bold">renttool<span class="text-primary">.com</span></h2>
+                        <h2 class="text-2xl font-bold">uniontechnicals<span class="text-primary">.com</span></h2>
                     </div>
                     <p class="text-gray-400">
                         Serviço profissional de aluguel de ferramentas de desbloqueio FRP.
@@ -487,13 +487,13 @@
                                 <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path>
                                 <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"></path>
                             </svg>
-                            <span>suporte@renttool.com</span>
+                            <span>suporte@uniontechnicals.com</span>
                         </li>
                     </ul>
                 </div>
             </div>
             <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-                <p>&copy; 2023 renttool.com. Todos os direitos reservados.</p>
+                <p>&copy; 2023 uniontechnicals.com. Todos os direitos reservados.</p>
             </div>
         </div>
     </footer>

@@ -22,7 +22,7 @@ class WhatsAppService
 
         switch ($whatsApi->authenticate) {
             case 'bearer':
-                $headers['Authorization'] = 'Bearer ' . $whatsApi->key;
+                $headers['Authorization'] = 'Bearer '.$whatsApi->key;
                 break;
 
             case 'x-api-key':
@@ -30,7 +30,7 @@ class WhatsAppService
                 break;
 
             case 'basic':
-                $headers['Authorization'] = 'Basic ' . base64_encode($whatsApi->key);
+                $headers['Authorization'] = 'Basic '.base64_encode($whatsApi->key);
                 break;
         }
 
@@ -49,7 +49,7 @@ class WhatsAppService
 
         $whatsApi = WhatsApi::find($whatsApiId);
 
-        if (!$whatsApi) {
+        if (! $whatsApi) {
             return [
                 'success' => false,
                 'message' => 'Configuração da API não encontrada.',
@@ -57,7 +57,7 @@ class WhatsAppService
         }
 
         // URL para iniciar sessão - usando o endpoint padrão da API
-        $url = $this->getBaseUrl($whatsApi) . "/session/start/{$instanceName}";
+        $url = $this->getBaseUrl($whatsApi)."/session/start/{$instanceName}";
         $headers = $this->getHeaders($whatsApi);
 
         Log::info('🔵 Enviando requisição para iniciar sessão → API', [
@@ -73,7 +73,7 @@ class WhatsAppService
                 'body_preview' => substr($response->body(), 0, 200),
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return [
                     'success' => false,
                     'message' => "Falha ao iniciar sessão: {$response->status()}",
@@ -101,7 +101,7 @@ class WhatsAppService
 
             return [
                 'success' => false,
-                'message' => 'Erro inesperado: ' . $e->getMessage(),
+                'message' => 'Erro inesperado: '.$e->getMessage(),
             ];
         }
     }
@@ -117,7 +117,7 @@ class WhatsAppService
 
         $whatsApi = WhatsApi::find($whatsApiId);
 
-        if (!$whatsApi) {
+        if (! $whatsApi) {
             return [
                 'success' => false,
                 'message' => 'Configuração da API não encontrada.',
@@ -125,9 +125,9 @@ class WhatsAppService
         }
 
         $sessionId = $whatsApi->instance_name;
-        
+
         // Corrigindo o endpoint - talvez seja /terminate/{sessionId} diretamente
-        $url = $this->getBaseUrl($whatsApi) . "/session/terminate/{$sessionId}";
+        $url = $this->getBaseUrl($whatsApi)."/session/terminate/{$sessionId}";
         $headers = $this->getHeaders($whatsApi);
 
         Log::info('🔵 Enviando requisição para terminar sessão → API', [
@@ -146,17 +146,17 @@ class WhatsAppService
 
             // Verificando se a resposta contém um erro específico
             $responseData = $response->json() ?? [];
-            
+
             // Se a API retornar sucesso como false, tratamos como erro
-            if (isset($responseData['success']) && !$responseData['success']) {
+            if (isset($responseData['success']) && ! $responseData['success']) {
                 $errorMessage = $responseData['error'] ?? $responseData['message'] ?? 'Erro desconhecido ao terminar sessão';
-                
+
                 Log::warning('⚠️ API retornou erro ao terminar sessão', [
                     'whats_api_id' => $whatsApiId,
                     'error_message' => $errorMessage,
                     'response_data' => $responseData,
                 ]);
-                
+
                 // Se for um erro de recurso ocupado, sugerimos uma mensagem mais amigável
                 if (strpos($errorMessage, 'EBUSY') !== false || strpos($errorMessage, 'resource busy') !== false) {
                     return [
@@ -165,7 +165,7 @@ class WhatsAppService
                         'data' => $responseData,
                     ];
                 }
-                
+
                 return [
                     'success' => false,
                     'message' => $errorMessage,
@@ -173,7 +173,7 @@ class WhatsAppService
                 ];
             }
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return [
                     'success' => false,
                     'message' => "Falha ao terminar sessão: {$response->status()}",
@@ -202,7 +202,7 @@ class WhatsAppService
 
             return [
                 'success' => false,
-                'message' => 'Erro inesperado: ' . $e->getMessage(),
+                'message' => 'Erro inesperado: '.$e->getMessage(),
             ];
         }
     }
@@ -218,7 +218,7 @@ class WhatsAppService
 
         $whatsApi = WhatsApi::find($whatsApiId);
 
-        if (!$whatsApi) {
+        if (! $whatsApi) {
             return [
                 'success' => false,
                 'message' => 'Configuração da API não encontrada.',
@@ -226,10 +226,10 @@ class WhatsAppService
         }
 
         $sessionId = $whatsApi->instance_name;
-        
+
         // Usando o endpoint correto conforme a documentação oficial
         // GET /session/status/{sessionId}
-        $url = $this->getBaseUrl($whatsApi) . "/session/status/{$sessionId}";
+        $url = $this->getBaseUrl($whatsApi)."/session/status/{$sessionId}";
         $headers = $this->getHeaders($whatsApi);
 
         Log::info('🔵 Enviando requisição para verificar status → API', [
@@ -245,7 +245,7 @@ class WhatsAppService
                 'body_preview' => substr($response->body(), 0, 200),
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return [
                     'success' => false,
                     'message' => "Falha ao obter status: {$response->status()}",
@@ -272,7 +272,7 @@ class WhatsAppService
                 'message' => 'Status obtido com sucesso',
                 'data' => [
                     'status' => $status,
-                    'raw' => $data
+                    'raw' => $data,
                 ],
             ];
 
@@ -284,7 +284,7 @@ class WhatsAppService
 
             return [
                 'success' => false,
-                'message' => 'Erro inesperado: ' . $e->getMessage(),
+                'message' => 'Erro inesperado: '.$e->getMessage(),
             ];
         }
     }
@@ -300,7 +300,7 @@ class WhatsAppService
 
         $whatsApi = WhatsApi::find($whatsApiId);
 
-        if (!$whatsApi) {
+        if (! $whatsApi) {
             return [
                 'success' => false,
                 'message' => 'Configuração da API não encontrada.',
@@ -308,10 +308,10 @@ class WhatsAppService
         }
 
         $sessionId = $whatsApi->instance_name;
-        
+
         // Endpoint para buscar lista de grupos
         // GET /client/getlistGrup/{sessionId}
-        $url = $this->getBaseUrl($whatsApi) . "/client/getlistGrup/{$sessionId}";
+        $url = $this->getBaseUrl($whatsApi)."/client/getlistGrup/{$sessionId}";
         $headers = $this->getHeaders($whatsApi);
 
         Log::info('🔵 Enviando requisição para buscar grupos → API', [
@@ -327,7 +327,7 @@ class WhatsAppService
                 'body_preview' => substr($response->body(), 0, 500),
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return [
                     'success' => false,
                     'message' => "Falha ao obter lista de grupos: {$response->status()}",
@@ -356,7 +356,7 @@ class WhatsAppService
 
             return [
                 'success' => false,
-                'message' => 'Erro inesperado: ' . $e->getMessage(),
+                'message' => 'Erro inesperado: '.$e->getMessage(),
             ];
         }
     }
@@ -373,7 +373,7 @@ class WhatsAppService
 
         $whatsApi = WhatsApi::find($whatsApiId);
 
-        if (!$whatsApi) {
+        if (! $whatsApi) {
             return [
                 'success' => false,
                 'message' => 'Configuração da API não encontrada.',
@@ -381,17 +381,17 @@ class WhatsAppService
         }
 
         $sessionId = $whatsApi->instance_name;
-        
+
         // Endpoint para enviar mensagem para grupo
         // POST /client/sendMessage/{sessionId}
-        $url = $this->getBaseUrl($whatsApi) . "/client/sendMessage/{$sessionId}";
+        $url = $this->getBaseUrl($whatsApi)."/client/sendMessage/{$sessionId}";
         $headers = $this->getHeaders($whatsApi);
 
         // Preparar os dados da requisição
         $requestData = [
-            'chatId' => $groupId . '@g.us', // Grupo IDs terminam com @g.us
+            'chatId' => $groupId.'@g.us', // Grupo IDs terminam com @g.us
             'contentType' => 'string', // Tipo de conteúdo
-            'content' => $message
+            'content' => $message,
         ];
 
         Log::info('🔵 Enviando requisição para enviar mensagem → API', [
@@ -408,7 +408,7 @@ class WhatsAppService
                 'body_preview' => substr($response->body(), 0, 500),
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return [
                     'success' => false,
                     'message' => "Falha ao enviar mensagem para o grupo: {$response->status()}",
@@ -437,7 +437,7 @@ class WhatsAppService
 
             return [
                 'success' => false,
-                'message' => 'Erro inesperado: ' . $e->getMessage(),
+                'message' => 'Erro inesperado: '.$e->getMessage(),
             ];
         }
     }
@@ -453,7 +453,7 @@ class WhatsAppService
 
         $whatsApi = WhatsApi::find($whatsApiId);
 
-        if (!$whatsApi) {
+        if (! $whatsApi) {
             return [
                 'success' => false,
                 'message' => 'Configuração da API não encontrada.',
@@ -461,7 +461,7 @@ class WhatsAppService
         }
 
         $sessionId = $whatsApi->instance_name;
-        $url = $this->getBaseUrl($whatsApi) . "/session/qr/{$sessionId}";
+        $url = $this->getBaseUrl($whatsApi)."/session/qr/{$sessionId}";
         $headers = $this->getHeaders($whatsApi);
 
         Log::info('🔵 Enviando requisição QR → API', [
@@ -477,7 +477,7 @@ class WhatsAppService
                 'body_preview' => substr($response->body(), 0, 200),
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return [
                     'success' => false,
                     'message' => "Falha ao obter QR Code: {$response->status()}",
@@ -496,7 +496,7 @@ class WhatsAppService
                   $data['data'] ??
                   (is_string($data) ? $data : null);
 
-            if (!$qr) {
+            if (! $qr) {
                 Log::warning('❗ API retornou resposta SEM QR code detectado.', [
                     'response_data' => $data,
                 ]);
@@ -529,7 +529,7 @@ class WhatsAppService
 
             return [
                 'success' => false,
-                'message' => 'Erro inesperado: ' . $e->getMessage(),
+                'message' => 'Erro inesperado: '.$e->getMessage(),
             ];
         }
     }
