@@ -18,6 +18,21 @@ class ServiceCustomField extends Model
         'parametros_campo' => 'array',
     ];
 
+    protected static function booted()
+    {
+        static::created(function ($model) {
+            \Illuminate\Support\Facades\Cache::forget('all_services_with_relations');
+        });
+
+        static::updated(function ($model) {
+            \Illuminate\Support\Facades\Cache::forget('all_services_with_relations');
+        });
+
+        static::deleted(function ($model) {
+            \Illuminate\Support\Facades\Cache::forget('all_services_with_relations');
+        });
+    }
+
     public function service()
     {
         return $this->belongsTo(Service::class);
