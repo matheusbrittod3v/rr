@@ -578,6 +578,98 @@
         .dark-mode ::-webkit-scrollbar-thumb:hover {
             background: #3B82F6;
         }
+        /* Banner Slider */
+        .banner-slider {
+            height: 400px;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        @media (min-width: 768px) {
+            .banner-slider {
+                height: 500px;
+            }
+        }
+
+        .banner-wrapper {
+            display: flex;
+            height: 100%;
+            width: 100%;
+            transition: transform 0.6s ease-in-out;
+        }
+
+        .banner-slide {
+            min-width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .banner-slide img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .banner-content {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 60%);
+            display: flex;
+            align-items: flex-end;
+            padding-bottom: 3rem;
+        }
+
+        .banner-dots {
+            position: absolute;
+            bottom: 1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 0.75rem;
+            z-index: 10;
+        }
+
+        .banner-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.4);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .banner-dot.active {
+            background: white;
+            width: 25px;
+            border-radius: 5px;
+        }
+
+        .banner-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+            color: white;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 10;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .banner-nav:hover {
+            background: rgba(255,255,255,0.25);
+        }
+
+        .banner-prev { left: 1.5rem; }
+        .banner-next { right: 1.5rem; }
     </style>
 </head>
 <body class="bg-slate-50 font-sans">
@@ -634,6 +726,133 @@
             </div>
         </div>
     </header>
+    
+    @if(isset($banners) && $banners->count() > 0)
+    <!-- Banner Section -->
+    <section class="banner-slider">
+        <div class="banner-wrapper" id="bannerWrapper">
+            @php $slideIndex = 0; @endphp
+            @foreach($banners as $banner)
+                @if(is_array($banner->imagens))
+                    @foreach($banner->imagens as $imagem)
+                    <div class="banner-slide">
+                        <img src="{{ asset('storage/' . $imagem) }}" alt="{{ $banner->nome }}">
+                        <div class="banner-content">
+                            <div class="container mx-auto px-4">
+                                
+                            </div>
+                        </div>
+                    </div>
+                    @php $slideIndex++; @endphp
+                    @endforeach
+                @endif
+            @endforeach
+        </div>
+        
+        @if($slideIndex > 1)
+        <!-- Navigation Dots -->
+        <div class="banner-dots" id="bannerDots">
+            @for($i = 0; $i < $slideIndex; $i++)
+                <div class="banner-dot {{ $i === 0 ? 'active' : '' }}" data-index="{{ $i }}"></div>
+            @endfor
+        </div>
+        
+        <!-- Navigation Arrows -->
+        <div class="banner-nav banner-prev" id="bannerPrev">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+        </div>
+        <div class="banner-nav banner-next" id="bannerNext">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+        </div>
+        @endif
+    </section>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const wrapper = document.getElementById('bannerWrapper');
+            const dots = document.querySelectorAll('.banner-dot');
+            const prevBtn = document.getElementById('bannerPrev');
+            const nextBtn = document.getElementById('bannerNext');
+            const slides = document.querySelectorAll('.banner-slide');
+            
+            if (!wrapper || slides.length <= 1) return;
+            
+            let currentIndex = 0;
+            const totalSlides = slides.length;
+            let autoPlayInterval;
+            
+            // Get animation time from first banner (or default to 5s)
+            @php 
+                $firstBanner = $banners->first();
+                $rotationTime = $firstBanner ? $firstBanner->tempo_rotacao : 5000;
+            @endphp
+            const rotationTime = {{ $rotationTime }};
+
+            function updateSlider() {
+                wrapper.style.transform = `translateX(-${currentIndex * 100}%)`;
+                
+                // Update dots
+                dots.forEach((dot, index) => {
+                    if (index === currentIndex) {
+                        dot.classList.add('active');
+                    } else {
+                        dot.classList.remove('active');
+                    }
+                });
+            }
+
+            function nextSlide() {
+                currentIndex = (currentIndex + 1) % totalSlides;
+                updateSlider();
+            }
+
+            function prevSlide() {
+                currentIndex = (currentIndex - 1 + totalSlides) % totalSlides;
+                updateSlider();
+            }
+
+            function startAutoPlay() {
+                autoPlayInterval = setInterval(nextSlide, rotationTime);
+            }
+
+            function stopAutoPlay() {
+                clearInterval(autoPlayInterval);
+            }
+
+            if (nextBtn) {
+                nextBtn.addEventListener('click', () => {
+                    nextSlide();
+                    stopAutoPlay();
+                    startAutoPlay();
+                });
+            }
+
+            if (prevBtn) {
+                prevBtn.addEventListener('click', () => {
+                    prevSlide();
+                    stopAutoPlay();
+                    startAutoPlay();
+                });
+            }
+
+            dots.forEach(dot => {
+                dot.addEventListener('click', () => {
+                    currentIndex = parseInt(dot.dataset.index);
+                    updateSlider();
+                    stopAutoPlay();
+                    startAutoPlay();
+                });
+            });
+
+            startAutoPlay();
+        });
+    </script>
+    @endif
+
     <section id="services" class="py-16 bg-white">
         <div class="container mx-auto px-4">
             <div id="marcasView" class="marcas-view">
@@ -2582,5 +2801,4 @@ E-mail: ${email}`);
     </script>
     
 </body>
-</html>
 </html>
